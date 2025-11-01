@@ -197,100 +197,96 @@ export const EmergencySearch = () => {
 
       {/* Region Selection Section */}
       <div className="border-b bg-card">
-        <div className="container mx-auto px-4 py-3">
-          <div className="mb-3">
-            <h2 className="text-base font-semibold">지역 선택</h2>
-            {currentAddress && (
-              <p className="text-sm text-muted-foreground mt-1">
-                <MapPin className="inline h-3 w-3 mr-1" />
+        <div className="container mx-auto px-4 py-6">
+          {currentAddress && (
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <MapPin className="inline h-4 w-4 mr-1" />
                 현재 위치: {currentAddress}
               </p>
-            )}
-          </div>
+            </div>
+          )}
           
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-            {/* Left: Province/City List */}
-            <div className="lg:col-span-1 space-y-1 max-h-64 overflow-y-auto">
-              {Object.keys(REGIONS).map((region) => (
-                <button
-                  key={region}
-                  onClick={() => {
-                    setStage1(region);
-                    setStage2("");
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                    stage1 === region
-                      ? "bg-primary text-primary-foreground font-medium"
-                      : "bg-muted hover:bg-muted/80"
-                  }`}
-                >
-                  {region}
-                  {stage1 === region && <span className="float-right">›</span>}
-                </button>
-              ))}
-            </div>
-
-            {/* Right: District Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3">
+            {/* Province/City Select */}
             <div className="lg:col-span-3">
-              {stage1 ? (
-                <>
-                  <div className="mb-2">
-                    <h3 className="text-sm font-medium">{stage1}</h3>
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 max-h-64 overflow-y-auto">
-                    <button
-                      onClick={() => setStage2("")}
-                      className={`px-2 py-1.5 rounded text-xs border transition-colors ${
-                        stage2 === ""
-                          ? "bg-destructive text-destructive-foreground border-destructive"
-                          : "bg-background border-border hover:bg-muted"
-                      }`}
-                    >
-                      전체
-                    </button>
-                    {availableDistricts.map((district) => (
-                      <button
-                        key={district}
-                        onClick={() => setStage2(district)}
-                        className={`px-2 py-1.5 rounded text-xs border transition-colors ${
-                          stage2 === district
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background border-border hover:bg-muted"
-                        }`}
-                      >
-                        {district}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-                  시/도를 선택해주세요
-                </div>
-              )}
+              <Select value={stage1} onValueChange={(value) => {
+                setStage1(value);
+                setStage2("");
+              }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="시/도 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(REGIONS).map((region) => (
+                    <SelectItem key={region} value={region}>
+                      {region.replace("특별시", "").replace("광역시", "").replace("특별자치시", "").replace("특별자치도", "").replace("도", "")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
 
-          {/* Search Button */}
-          <div className="mt-3">
-            <Button 
-              onClick={handleSearch} 
-              disabled={loading || !stage1} 
-              className="w-full" 
-              size="default"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  검색 중...
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4 mr-2" />
-                  {stage2 ? `${stage1} ${stage2}` : stage1} 응급실 검색
-                </>
-              )}
-            </Button>
+            {/* District Select */}
+            <div className="lg:col-span-3">
+              <Select 
+                value={stage2} 
+                onValueChange={setStage2}
+                disabled={!stage1}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={stage1 ? "시/군/구 선택" : "시/도를 먼저 선택하세요"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">전체</SelectItem>
+                  {availableDistricts.map((district) => (
+                    <SelectItem key={district} value={district}>
+                      {district}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Search Button */}
+            <div className="lg:col-span-4">
+              <Button 
+                onClick={handleSearch} 
+                disabled={loading || !stage1} 
+                className="w-full" 
+                size="default"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    검색 중...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4 mr-2" />
+                    검색
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Current Location Button */}
+            <div className="lg:col-span-2">
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  if (currentLat && currentLng) {
+                    handleSearch();
+                  }
+                }}
+                disabled={loading || !currentLat}
+                className="w-full"
+                size="default"
+              >
+                <MapPin className="w-4 h-4 mr-2" />
+                내 위치에서 찾기
+              </Button>
+            </div>
           </div>
         </div>
       </div>
