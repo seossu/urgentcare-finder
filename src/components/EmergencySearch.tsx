@@ -108,6 +108,98 @@ export const EmergencySearch = () => {
     }
   }, []);
 
+  const handleFindNearMe = async () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "위치 서비스 없음",
+        description: "브라우저가 위치 서비스를 지원하지 않습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setCurrentLat(lat);
+        setCurrentLng(lng);
+        
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-reverse-geocode`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ lat, lng }),
+            }
+          );
+          const data = await response.json();
+          
+          if (data.address) {
+            setCurrentAddress(data.address);
+          }
+          
+          if (data.region1) {
+            const regionMap: Record<string, string> = {
+              "서울": "서울특별시",
+              "부산": "부산광역시",
+              "대구": "대구광역시",
+              "인천": "인천광역시",
+              "광주": "광주광역시",
+              "대전": "대전광역시",
+              "울산": "울산광역시",
+              "세종": "세종특별자치시",
+              "경기": "경기도",
+              "강원": "강원특별자치도",
+              "충북": "충청북도",
+              "충남": "충청남도",
+              "전북": "전북특별자치도",
+              "전남": "전라남도",
+              "경북": "경상북도",
+              "경남": "경상남도",
+              "제주": "제주특별자치도",
+            };
+            
+            const fullRegionName = regionMap[data.region1] || data.region1;
+            setStage1(fullRegionName);
+            if (data.region2) {
+              setStage2(data.region2);
+            }
+            
+            toast({
+              title: "현재 위치 설정",
+              description: data.address || `${fullRegionName} ${data.region2 || ''}`,
+            });
+
+            // 자동으로 검색 실행
+            await handleSearch();
+          }
+        } catch (error) {
+          console.error("현재 위치 조회 실패:", error);
+          toast({
+            title: "위치 조회 실패",
+            description: "현재 위치를 가져올 수 없습니다.",
+            variant: "destructive",
+          });
+          setLoading(false);
+        }
+      },
+      (error) => {
+        console.error("위치 정보를 가져올 수 없습니다:", error);
+        toast({
+          title: "위치 정보 없음",
+          description: "위치 권한을 허용해주세요.",
+          variant: "destructive",
+        });
+        setLoading(false);
+      }
+    );
+  };
+
   const handleSearch = async () => {
     if (!stage1) {
       toast({
@@ -274,12 +366,8 @@ export const EmergencySearch = () => {
             <div className="lg:col-span-2">
               <Button 
                 variant="outline"
-                onClick={() => {
-                  if (currentLat && currentLng) {
-                    handleSearch();
-                  }
-                }}
-                disabled={loading || !currentLat}
+                onClick={handleFindNearMe}
+                disabled={loading}
                 className="w-full"
                 size="default"
               >
