@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Hospital, MapPin, Phone, Navigation, ArrowLeft, Bed, Users } from "lucide-react";
+import { Hospital, MapPin, Phone, Navigation, ArrowLeft, Bed, Users, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -24,6 +24,150 @@ const Emergency = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
   const [emergencyRooms, setEmergencyRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addressInput, setAddressInput] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const fetchEmergencyRooms = async (lat: number, lng: number) => {
+    // Convert coordinates to address using Kakao API via Edge Function
+    let region1 = '';
+    let region2 = '';
+    let address = '';
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-reverse-geocode`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ lat, lng }),
+        }
+      );
+      const data = await response.json();
+      
+      if (data.address) {
+        address = data.address;
+        region1 = data.region1 || '';
+        region2 = data.region2 || '';
+        setAddressInput(address);
+      }
+    } catch (error) {
+      console.error("주소 변환 실패:", error);
+    }
+
+    setUserLocation({ lat, lng, address });
+
+    // Fetch emergency rooms
+    try {
+      const emergencyResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-emergency-rooms`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            lat, 
+            lng, 
+            radius: 10000,
+            region1,
+            region2,
+          }),
+        }
+      );
+      const emergencyData = await emergencyResponse.json();
+      
+      const items = emergencyData.response?.body?.items?.item || [];
+      
+      if (items.length > 0) {
+        const normalized = items
+          .map((room: any) => {
+            const latNum = parseFloat(room.wgs84Lat) || lat;
+            const lonNum = parseFloat(room.wgs84Lon) || lng;
+            const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
+            
+            const totalBeds = parseInt(room.hvec) || 0;
+            const availableBeds = parseInt(room.hv1) || 0;
+            
+            const doctors = [];
+            if (room.MKioskTy1 === 'Y') doctors.push('내과');
+            if (room.MKioskTy2 === 'Y') doctors.push('외과');
+            if (room.MKioskTy3 === 'Y') doctors.push('소아과');
+            if (room.MKioskTy4 === 'Y') doctors.push('산부인과');
+            if (room.MKioskTy5 === 'Y') doctors.push('안과');
+            if (room.MKioskTy7 === 'Y') doctors.push('치과');
+            if (room.MKioskTy8 === 'Y') doctors.push('한방');
+            if (room.MKioskTy10 === 'Y') doctors.push('신경외과');
+            if (room.MKioskTy11 === 'Y') doctors.push('흉부외과');
+            if (doctors.length === 0) doctors.push('응급의학과');
+
+            return {
+              id: room.hpid || Math.random().toString(),
+              name: room.dutyName || '이름 없음',
+              phone: room.dutyTel3 || room.dutyTel1 || '연락처 없음',
+              address: room.dutyAddr || '주소 없음',
+              lat: latNum,
+              lng: lonNum,
+              totalBeds,
+              availableBeds,
+              doctors,
+              calculatedDistance,
+            };
+          })
+          .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+          .slice(0, 30)
+          .map((room: any) => ({
+            ...room,
+            distance: `${room.calculatedDistance.toFixed(1)}km`,
+          }));
+        
+        setEmergencyRooms(normalized);
+      }
+    } catch (error) {
+      console.error("응급실 정보 조회 실패:", error);
+      toast.error("응급실 정보를 가져올 수 없습니다");
+    }
+  };
+
+  const searchByAddress = async () => {
+    if (!addressInput.trim()) {
+      toast.error("주소를 입력해주세요");
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      // Kakao geocoding API to convert address to coordinates
+      const response = await fetch(
+        `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(addressInput)}`,
+        {
+          headers: {
+            Authorization: `KakaoAK ${import.meta.env.VITE_KAKAO_REST_API_KEY}`,
+          },
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.documents && data.documents.length > 0) {
+        const { x, y } = data.documents[0];
+        const lat = parseFloat(y);
+        const lng = parseFloat(x);
+        
+        await fetchEmergencyRooms(lat, lng);
+        setLoading(false);
+        toast.success("해당 주소의 응급실을 찾았습니다");
+      } else {
+        toast.error("주소를 찾을 수 없습니다. 정확한 도로명 주소를 입력해주세요.");
+      }
+    } catch (error) {
+      console.error("주소 검색 실패:", error);
+      toast.error("주소 검색에 실패했습니다");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Get user's current location
@@ -33,114 +177,8 @@ const Emergency = () => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
           
-          setUserLocation({ lat, lng });
-
-          // Convert coordinates to address using Kakao API via Edge Function
-          let region1 = '';
-          let region2 = '';
-          
-          try {
-            const response = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-reverse-geocode`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ lat, lng }),
-              }
-            );
-            const data = await response.json();
-            
-            if (data.address) {
-              setUserLocation({ lat, lng, address: data.address });
-              region1 = data.region1 || '';
-              region2 = data.region2 || '';
-              console.log("지역 정보:", region1, region2);
-            }
-          } catch (error) {
-            console.error("주소 변환 실패:", error);
-          }
-
-          // Fetch emergency rooms using 전국 응급의료기관 API
-          try {
-            const emergencyResponse = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-emergency-rooms`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                  lat, 
-                  lng, 
-                  radius: 10000, // 10km radius in meters
-                  region1, // 시/도
-                  region2, // 시/군/구
-                }),
-              }
-            );
-            const emergencyData = await emergencyResponse.json();
-            
-            // Log the response structure for debugging
-            console.log("Emergency API Response:", emergencyData);
-            console.log("Sample item:", emergencyData.response?.body?.items?.item?.[0]);
-            
-            // Handle both Public Data API and Kakao API response formats
-            const items = emergencyData.response?.body?.items?.item || [];
-            
-            if (items.length > 0) {
-              const normalized = items
-                .map((room: any) => {
-                  const latNum = parseFloat(room.wgs84Lat) || lat;
-                  const lonNum = parseFloat(room.wgs84Lon) || lng;
-                  const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
-                  
-                  // Parse bed information from real-time data (enriched from API)
-                  const totalBeds = parseInt(room.totalBeds) || parseInt(room.hvec) || 0;
-                  const availableBeds = parseInt(room.availableBeds) || 0;
-                  
-                  // Parse available doctors/departments
-                  const doctors = [];
-                  if (room.MKioskTy1 === 'Y') doctors.push('내과');
-                  if (room.MKioskTy2 === 'Y') doctors.push('외과');
-                  if (room.MKioskTy3 === 'Y') doctors.push('소아과');
-                  if (room.MKioskTy4 === 'Y') doctors.push('산부인과');
-                  if (room.MKioskTy5 === 'Y') doctors.push('안과');
-                  if (room.MKioskTy7 === 'Y') doctors.push('치과');
-                  if (room.MKioskTy8 === 'Y') doctors.push('한방');
-                  if (room.MKioskTy10 === 'Y') doctors.push('신경외과');
-                  if (room.MKioskTy11 === 'Y') doctors.push('흉부외과');
-                  if (doctors.length === 0) doctors.push('응급의학과');
-
-                  return {
-                    id: room.hpid || Math.random().toString(),
-                    name: room.dutyName || '이름 없음',
-                    phone: room.dutyTel3 || room.dutyTel1 || '연락처 없음', // 응급실 전화
-                    address: room.dutyAddr || '주소 없음',
-                    lat: latNum,
-                    lng: lonNum,
-                    totalBeds,
-                    availableBeds,
-                    doctors,
-                    calculatedDistance,
-                  };
-                })
-                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
-                .slice(0, 30)
-                .map((room: any) => ({
-                  ...room,
-                  distance: `${room.calculatedDistance.toFixed(1)}km`,
-                }));
-              
-              setEmergencyRooms(normalized);
-            }
-          } catch (error) {
-            console.error("응급실 정보 조회 실패:", error);
-            toast.error("응급실 정보를 가져올 수 없습니다");
-          } finally {
-            setLoading(false);
-          }
+          await fetchEmergencyRooms(lat, lng);
+          setLoading(false);
         },
         (error) => {
           console.error("위치 정보를 가져올 수 없습니다:", error);
@@ -246,15 +284,28 @@ const Emergency = () => {
             <div className="flex-1 relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="위치를 가져오는 중..."
+                placeholder="도로명 주소를 입력하세요 (예: 서울특별시 강남구 테헤란로 152)"
                 className="pl-10"
-                value={userLocation?.address || "위치를 가져오는 중..."}
-                readOnly
+                value={addressInput}
+                onChange={(e) => setAddressInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    searchByAddress();
+                  }
+                }}
               />
             </div>
-            <Button variant="secondary">
-              <MapPin className="h-4 w-4 mr-2" />
-              현재 위치
+            <Button 
+              variant="secondary" 
+              onClick={searchByAddress}
+              disabled={searchLoading}
+            >
+              {searchLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <MapPin className="h-4 w-4 mr-2" />
+              )}
+              검색
             </Button>
           </div>
         </div>
