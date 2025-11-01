@@ -71,8 +71,9 @@ const Emergency = () => {
             const emergencyData = await emergencyResponse.json();
             
             if (emergencyData.emergencyRooms && emergencyData.emergencyRooms.length > 0) {
-              // Calculate distances and sort
+              // Filter emergency rooms only (exclude pharmacies and non-emergency facilities)
               const roomsWithDistance = emergencyData.emergencyRooms
+                .filter((room: any) => room.dutyEryn === 1) // Only emergency rooms
                 .map((room: any) => ({
                   id: room.hpid || Math.random().toString(),
                   name: room.dutyName || '이름 없음',
