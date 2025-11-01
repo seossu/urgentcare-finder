@@ -138,24 +138,21 @@ const Emergency = () => {
 
     setSearchLoading(true);
     try {
-      // Kakao geocoding API to convert address to coordinates
       const response = await fetch(
-        `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(addressInput)}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-geocode`,
         {
+          method: 'POST',
           headers: {
-            Authorization: `KakaoAK ${import.meta.env.VITE_KAKAO_REST_API_KEY}`,
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({ address: addressInput }),
         }
       );
       
       const data = await response.json();
       
-      if (data.documents && data.documents.length > 0) {
-        const { x, y } = data.documents[0];
-        const lat = parseFloat(y);
-        const lng = parseFloat(x);
-        
-        await fetchEmergencyRooms(lat, lng);
+      if (data.success && data.lat && data.lng) {
+        await fetchEmergencyRooms(data.lat, data.lng);
         setLoading(false);
         toast.success("해당 주소의 응급실을 찾았습니다");
       } else {
