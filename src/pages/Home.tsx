@@ -5,6 +5,7 @@ import { MapPin, Hospital, Stethoscope, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import adBanner from "@/assets/ad-banner.jpg";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -138,6 +139,21 @@ const Home = () => {
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Advertisement Banner */}
+      <section className="container mx-auto px-4 py-8">
+        <div className="max-w-5xl mx-auto">
+          <img 
+            src={adBanner} 
+            alt="광고 배너" 
+            className="w-full rounded-lg shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
+            onClick={() => {
+              // 광고 클릭 시 동작 (필요시 수정)
+              console.log("광고 클릭");
+            }}
+          />
         </div>
       </section>
     </div>
