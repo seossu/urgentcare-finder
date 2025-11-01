@@ -2,3 +2,9 @@ project_id = "isieibfnexlimfujpqma"
 
 [functions.kakao-reverse-geocode]
 verify_jwt = false
+
+[functions.fetch-emergency-rooms]
+verify_jwt = false
+
+[functions.fetch-hospitals]
+verify_jwt = false

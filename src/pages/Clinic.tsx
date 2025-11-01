@@ -33,6 +33,8 @@ const Clinic = () => {
   const [department, setDepartment] = useState("all");
   const [sortBy, setSortBy] = useState("distance");
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
+  const [hospitals, setHospitals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Get user's current location
@@ -64,14 +66,66 @@ const Clinic = () => {
           } catch (error) {
             console.error("주소 변환 실패:", error);
           }
+
+          // Fetch hospitals from Public Data API
+          try {
+            const hospitalResponse = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ lat, lng, radius: parseInt(distance) }),
+              }
+            );
+            const hospitalData = await hospitalResponse.json();
+            
+            if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
+              // Calculate distances and sort
+              const hospitalsWithDistance = hospitalData.hospitals
+                .map((hospital: any) => ({
+                  id: hospital.ykiho || Math.random().toString(),
+                  name: hospital.yadmNm || '이름 없음',
+                  phone: hospital.telno || '연락처 없음',
+                  address: hospital.addr || '주소 없음',
+                  lat: parseFloat(hospital.YPos) || lat,
+                  lng: parseFloat(hospital.XPos) || lng,
+                  department: hospital.clCdNm || "일반",
+                  isOpen: true,
+                  closingTime: "18:00",
+                  hours: "평일 09:00~18:00",
+                  hasNaverBooking: false,
+                  calculatedDistance: calculateDistance(
+                    lat,
+                    lng,
+                    parseFloat(hospital.YPos) || lat,
+                    parseFloat(hospital.XPos) || lng
+                  ),
+                }))
+                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+                .map((hospital: any) => ({
+                  ...hospital,
+                  distance: `${hospital.calculatedDistance.toFixed(1)}km`,
+                }));
+              
+              setHospitals(hospitalsWithDistance);
+            }
+          } catch (error) {
+            console.error("병원 정보 조회 실패:", error);
+            toast.error("병원 정보를 가져올 수 없습니다");
+          } finally {
+            setLoading(false);
+          }
         },
         (error) => {
           console.error("위치 정보를 가져올 수 없습니다:", error);
           toast.error("위치 정보를 가져올 수 없습니다");
+          setLoading(false);
         }
       );
     }
-  }, []);
+  }, [distance]);
 
   const handleNavigation = (clinicName: string, clinicAddress: string) => {
     if (!userLocation) {
@@ -93,7 +147,7 @@ const Clinic = () => {
     window.open(naverBookingUrl, "_blank");
   };
 
-  // Mock data with coordinates
+  // Mock data with coordinates (fallback if API fails)
   const clinicsData = [
     {
       id: 1,
@@ -134,182 +188,27 @@ const Clinic = () => {
       hours: "평일 09:00~18:00, 일요일 휴무",
       hasNaverBooking: false,
     },
-    {
-      id: 4,
-      name: "명동성모이비인후과",
-      phone: "02-777-8888",
-      address: "서울특별시 중구 명동길 74",
-      lat: 37.5610,
-      lng: 126.9840,
-      department: "이비인후과",
-      isOpen: true,
-      closingTime: "20:00",
-      hours: "평일 10:00~20:00, 토 10:00~15:00",
-      hasNaverBooking: true,
-    },
-    {
-      id: 5,
-      name: "강남피부과의원",
-      phone: "02-555-6666",
-      address: "서울특별시 강남구 테헤란로 123",
-      lat: 37.5048,
-      lng: 127.0268,
-      department: "피부과",
-      isOpen: true,
-      closingTime: "19:00",
-      hours: "평일 09:30~19:00, 토 09:30~14:00",
-      hasNaverBooking: true,
-    },
-    {
-      id: 6,
-      name: "행복한치과",
-      phone: "02-888-9999",
-      address: "서울특별시 마포구 양화로 160",
-      lat: 37.5565,
-      lng: 126.9226,
-      department: "치과",
-      isOpen: true,
-      closingTime: "18:30",
-      hours: "평일 09:00~18:30, 토 09:00~13:00",
-      hasNaverBooking: false,
-    },
-    {
-      id: 7,
-      name: "신촌가정의학과",
-      phone: "02-333-4444",
-      address: "서울특별시 서대문구 신촌로 77",
-      lat: 37.5583,
-      lng: 126.9379,
-      department: "가정의학과",
-      isOpen: true,
-      closingTime: "17:00",
-      hours: "평일 09:00~17:00, 토요일 휴무",
-      hasNaverBooking: true,
-    },
-    {
-      id: 8,
-      name: "수내정형외과",
-      phone: "031-716-5555",
-      address: "경기도 성남시 분당구 중앙공원로 55",
-      lat: 37.3837,
-      lng: 127.1225,
-      department: "정형외과",
-      isOpen: false,
-      closingTime: null,
-      hours: "평일 09:00~18:00, 일요일 휴무",
-      hasNaverBooking: true,
-    },
-    {
-      id: 9,
-      name: "종로안과의원",
-      phone: "02-722-3333",
-      address: "서울특별시 종로구 종로 188",
-      lat: 37.5707,
-      lng: 126.9847,
-      department: "안과",
-      isOpen: true,
-      closingTime: "18:00",
-      hours: "평일 09:00~18:00, 토 09:00~13:00",
-      hasNaverBooking: true,
-    },
-    {
-      id: 10,
-      name: "여의도내과의원",
-      phone: "02-782-1111",
-      address: "서울특별시 영등포구 여의대로 108",
-      lat: 37.5219,
-      lng: 126.9245,
-      department: "내과",
-      isOpen: true,
-      closingTime: "19:00",
-      hours: "평일 08:30~19:00, 토 08:30~13:00",
-      hasNaverBooking: true,
-    },
-    {
-      id: 11,
-      name: "잠실가정의학과",
-      phone: "02-411-2222",
-      address: "서울특별시 송파구 올림픽로 240",
-      lat: 37.5134,
-      lng: 127.1015,
-      department: "가정의학과",
-      isOpen: true,
-      closingTime: "18:00",
-      hours: "평일 09:00~18:00, 토 09:00~12:00",
-      hasNaverBooking: false,
-    },
-    {
-      id: 12,
-      name: "홍대치과의원",
-      phone: "02-325-7777",
-      address: "서울특별시 마포구 와우산로 94",
-      lat: 37.5563,
-      lng: 126.9255,
-      department: "치과",
-      isOpen: true,
-      closingTime: "20:00",
-      hours: "평일 10:00~20:00, 토 10:00~15:00",
-      hasNaverBooking: true,
-    },
-    {
-      id: 13,
-      name: "역삼이비인후과",
-      phone: "02-567-8888",
-      address: "서울특별시 강남구 테헤란로 212",
-      lat: 37.5001,
-      lng: 127.0362,
-      department: "이비인후과",
-      isOpen: true,
-      closingTime: "19:30",
-      hours: "평일 09:00~19:30, 토 09:00~14:00",
-      hasNaverBooking: true,
-    },
-    {
-      id: 14,
-      name: "건대정형외과의원",
-      phone: "02-458-9999",
-      address: "서울특별시 광진구 능동로 120",
-      lat: 37.5409,
-      lng: 127.0708,
-      department: "정형외과",
-      isOpen: false,
-      closingTime: null,
-      hours: "평일 09:00~18:00, 일요일 휴무",
-      hasNaverBooking: false,
-    },
-    {
-      id: 15,
-      name: "대치소아과의원",
-      phone: "02-563-3333",
-      address: "서울특별시 강남구 선릉로 428",
-      lat: 37.4959,
-      lng: 127.0622,
-      department: "소아청소년과",
-      isOpen: true,
-      closingTime: "19:00",
-      hours: "평일 09:00~19:00, 토 09:00~15:00",
-      hasNaverBooking: true,
-    },
   ];
 
-  // Calculate distances and sort by nearest
-  const clinics = userLocation
-    ? clinicsData
-        .map((clinic) => ({
-          ...clinic,
-          calculatedDistance: calculateDistance(
-            userLocation.lat,
-            userLocation.lng,
-            clinic.lat,
-            clinic.lng
-          ),
-        }))
-        .sort((a, b) => a.calculatedDistance - b.calculatedDistance)
-        .map((clinic) => ({
-          ...clinic,
-          distance: `${clinic.calculatedDistance.toFixed(1)}km`,
-        }))
-    : clinicsData.map((clinic) => ({ ...clinic, distance: "계산 중..." }));
+  // Use real data if available, otherwise use mock data
+  const clinics = hospitals.length > 0 ? hospitals :
+    userLocation
+      ? clinicsData
+          .map((clinic) => ({
+            ...clinic,
+            calculatedDistance: calculateDistance(
+              userLocation.lat,
+              userLocation.lng,
+              clinic.lat,
+              clinic.lng
+            ),
+          }))
+          .sort((a, b) => a.calculatedDistance - b.calculatedDistance)
+          .map((clinic) => ({
+            ...clinic,
+            distance: `${clinic.calculatedDistance.toFixed(1)}km`,
+          }))
+      : clinicsData.map((clinic) => ({ ...clinic, distance: "계산 중..." }));
 
   const departments = [
     { value: "all", label: "전체" },
@@ -402,7 +301,9 @@ const Clinic = () => {
       <div className="container mx-auto px-4 py-6">
         <div className="mb-4">
           <p className="text-sm text-muted-foreground">
-            총 <span className="font-semibold text-foreground">{clinics.length}개</span>의 병원이 있습니다
+            {loading ? "병원 정보를 불러오는 중..." : (
+              <>총 <span className="font-semibold text-foreground">{clinics.length}개</span>의 병원이 있습니다</>
+            )}
           </p>
         </div>
 

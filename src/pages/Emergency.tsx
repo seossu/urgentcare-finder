@@ -22,6 +22,8 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 const Emergency = () => {
   const navigate = useNavigate();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
+  const [emergencyRooms, setEmergencyRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Get user's current location
@@ -53,10 +55,60 @@ const Emergency = () => {
           } catch (error) {
             console.error("주소 변환 실패:", error);
           }
+
+          // Fetch emergency rooms from Public Data API
+          try {
+            const emergencyResponse = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-emergency-rooms`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ lat, lng, radius: 20 }),
+              }
+            );
+            const emergencyData = await emergencyResponse.json();
+            
+            if (emergencyData.emergencyRooms && emergencyData.emergencyRooms.length > 0) {
+              // Calculate distances and sort
+              const roomsWithDistance = emergencyData.emergencyRooms
+                .map((room: any) => ({
+                  id: room.hpid || Math.random().toString(),
+                  name: room.dutyName || '이름 없음',
+                  phone: room.dutyTel1 || '연락처 없음',
+                  address: room.dutyAddr || '주소 없음',
+                  lat: parseFloat(room.wgs84Lat) || lat,
+                  lng: parseFloat(room.wgs84Lon) || lng,
+                  totalBeds: parseInt(room.hvec) || 0,
+                  availableBeds: parseInt(room.hvec) || 0,
+                  doctors: ["응급의학과"],
+                  calculatedDistance: calculateDistance(
+                    lat,
+                    lng,
+                    parseFloat(room.wgs84Lat) || lat,
+                    parseFloat(room.wgs84Lon) || lng
+                  ),
+                }))
+                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+                .map((room: any) => ({
+                  ...room,
+                  distance: `${room.calculatedDistance.toFixed(1)}km`,
+                }));
+              
+              setEmergencyRooms(roomsWithDistance);
+            }
+          } catch (error) {
+            console.error("응급실 정보 조회 실패:", error);
+            toast.error("응급실 정보를 가져올 수 없습니다");
+          } finally {
+            setLoading(false);
+          }
         },
         (error) => {
           console.error("위치 정보를 가져올 수 없습니다:", error);
           toast.error("위치 정보를 가져올 수 없습니다");
+          setLoading(false);
         }
       );
     }
@@ -76,7 +128,7 @@ const Emergency = () => {
     window.open(naverMapUrl, "_blank");
   };
 
-  // Mock data with coordinates
+  // Mock data with coordinates (fallback if API fails)
   const emergencyRoomsData = [
     {
       id: 1,
@@ -111,125 +163,27 @@ const Emergency = () => {
       availableBeds: 15,
       doctors: ["외과", "내과", "신경외과", "흉부외과"],
     },
-    {
-      id: 4,
-      name: "세브란스병원 응급의료센터",
-      phone: "02-2228-5000",
-      address: "서울특별시 서대문구 연세로 50-1",
-      lat: 37.5626,
-      lng: 126.9404,
-      totalBeds: 50,
-      availableBeds: 10,
-      doctors: ["외과", "내과", "신경외과", "정형외과"],
-    },
-    {
-      id: 5,
-      name: "서울아산병원 어린이병원 응급실",
-      phone: "02-3010-3350",
-      address: "서울특별시 송파구 올림픽로 43길 88",
-      lat: 37.5268,
-      lng: 127.1105,
-      totalBeds: 30,
-      availableBeds: 7,
-      doctors: ["소아과", "소아외과"],
-    },
-    {
-      id: 6,
-      name: "강남세브란스병원 응급의료센터",
-      phone: "02-2019-3000",
-      address: "서울특별시 강남구 언주로 211",
-      lat: 37.5194,
-      lng: 127.0403,
-      totalBeds: 45,
-      availableBeds: 9,
-      doctors: ["외과", "내과", "정형외과"],
-    },
-    {
-      id: 7,
-      name: "고려대학교안암병원 응급의료센터",
-      phone: "02-920-5114",
-      address: "서울특별시 성북구 고려대로 73",
-      lat: 37.5866,
-      lng: 127.0266,
-      totalBeds: 40,
-      availableBeds: 11,
-      doctors: ["외과", "내과", "신경외과"],
-    },
-    {
-      id: 8,
-      name: "서울성모병원 응급의료센터",
-      phone: "02-2258-5114",
-      address: "서울특별시 서초구 반포대로 222",
-      lat: 37.5011,
-      lng: 127.0063,
-      totalBeds: 48,
-      availableBeds: 6,
-      doctors: ["외과", "내과", "정형외과", "신경외과"],
-    },
-    {
-      id: 9,
-      name: "한양대학교병원 응급의료센터",
-      phone: "02-2290-8114",
-      address: "서울특별시 성동구 왕십리로 222",
-      lat: 37.5597,
-      lng: 127.0421,
-      totalBeds: 38,
-      availableBeds: 13,
-      doctors: ["외과", "내과", "흉부외과"],
-    },
-    {
-      id: 10,
-      name: "분당서울대병원 응급의료센터",
-      phone: "031-787-7119",
-      address: "경기도 성남시 분당구 구미로 173번길 82",
-      lat: 37.3527,
-      lng: 127.1246,
-      totalBeds: 42,
-      availableBeds: 8,
-      doctors: ["외과", "내과", "정형외과", "신경외과"],
-    },
-    {
-      id: 11,
-      name: "이대서울병원 응급의료센터",
-      phone: "02-6986-4119",
-      address: "서울특별시 강서구 공항대로 260",
-      lat: 37.5609,
-      lng: 126.8510,
-      totalBeds: 35,
-      availableBeds: 14,
-      doctors: ["외과", "내과", "산부인과"],
-    },
-    {
-      id: 12,
-      name: "중앙대학교병원 응급의료센터",
-      phone: "02-6299-1114",
-      address: "서울특별시 동작구 흑석로 102",
-      lat: 37.5042,
-      lng: 126.9547,
-      totalBeds: 36,
-      availableBeds: 10,
-      doctors: ["외과", "내과", "정형외과"],
-    },
   ];
 
-  // Calculate distances and sort by nearest
-  const emergencyRooms = userLocation
-    ? emergencyRoomsData
-        .map((room) => ({
-          ...room,
-          calculatedDistance: calculateDistance(
-            userLocation.lat,
-            userLocation.lng,
-            room.lat,
-            room.lng
-          ),
-        }))
-        .sort((a, b) => a.calculatedDistance - b.calculatedDistance)
-        .map((room) => ({
-          ...room,
-          distance: `${room.calculatedDistance.toFixed(1)}km`,
-        }))
-    : emergencyRoomsData.map((room) => ({ ...room, distance: "계산 중..." }));
+  // Use real data if available, otherwise use mock data
+  const displayRooms = emergencyRooms.length > 0 ? emergencyRooms : 
+    userLocation
+      ? emergencyRoomsData
+          .map((room) => ({
+            ...room,
+            calculatedDistance: calculateDistance(
+              userLocation.lat,
+              userLocation.lng,
+              room.lat,
+              room.lng
+            ),
+          }))
+          .sort((a, b) => a.calculatedDistance - b.calculatedDistance)
+          .map((room) => ({
+            ...room,
+            distance: `${room.calculatedDistance.toFixed(1)}km`,
+          }))
+      : emergencyRoomsData.map((room) => ({ ...room, distance: "계산 중..." }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -273,12 +227,14 @@ const Emergency = () => {
       <div className="container mx-auto px-4 py-6">
         <div className="mb-4">
           <p className="text-sm text-muted-foreground">
-            총 <span className="font-semibold text-foreground">{emergencyRooms.length}개</span>의 응급실이 있습니다
+            {loading ? "응급실 정보를 불러오는 중..." : (
+              <>총 <span className="font-semibold text-foreground">{displayRooms.length}개</span>의 응급실이 있습니다</>
+            )}
           </p>
         </div>
 
         <div className="space-y-4">
-          {emergencyRooms.map((room) => (
+          {displayRooms.map((room) => (
             <Card key={room.id} className="p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
