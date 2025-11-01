@@ -20,20 +20,22 @@ const Emergency = () => {
           
           setUserLocation({ lat, lng });
 
-          // Convert coordinates to address using Nominatim API
+          // Convert coordinates to address using Kakao API via Edge Function
           try {
             const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ko`,
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-reverse-geocode`,
               {
+                method: 'POST',
                 headers: {
-                  'User-Agent': 'HealthCareApp/1.0'
-                }
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ lat, lng }),
               }
             );
             const data = await response.json();
             
-            if (data.display_name) {
-              setUserLocation({ lat, lng, address: data.display_name });
+            if (data.address) {
+              setUserLocation({ lat, lng, address: data.address });
             }
           } catch (error) {
             console.error("주소 변환 실패:", error);
