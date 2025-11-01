@@ -65,13 +65,6 @@ serve(async (req) => {
   try {
     const { lat, lng, radius = 10000, region1, region2 } = await req.json();
 
-    if (!lat || !lng) {
-      return new Response(
-        JSON.stringify({ error: "위도(lat)와 경도(lng)가 필요합니다." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Fetch emergency rooms from NEMC API
     if (!region1) {
       return new Response(
@@ -114,13 +107,16 @@ serve(async (req) => {
             
             // Transform NEMC data to match expected format
             const transformedItems = hospitals.map((hospital: any) => {
-              // Calculate distance from user location
-              const distance = calculateDistance(
-                lat,
-                lng,
-                hospital.latitude,
-                hospital.longitude
-              );
+              // Calculate distance from user location if lat/lng provided
+              let distance = 0;
+              if (lat && lng) {
+                distance = calculateDistance(
+                  lat,
+                  lng,
+                  hospital.latitude,
+                  hospital.longitude
+                );
+              }
               
               return {
                 hpid: hospital.emogCode,
@@ -141,8 +137,10 @@ serve(async (req) => {
               };
             });
             
-            // Sort by distance
-            transformedItems.sort((a: any, b: any) => a.distance - b.distance);
+            // Sort by distance if lat/lng provided, otherwise keep original order
+            if (lat && lng) {
+              transformedItems.sort((a: any, b: any) => a.distance - b.distance);
+            }
             
             console.info(`Transformed ${transformedItems.length} hospitals`);
             // Return data in expected format
