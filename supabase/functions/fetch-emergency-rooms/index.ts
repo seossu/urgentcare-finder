@@ -1,145 +1,63 @@
+// supabase/functions/fetch-emergency-rooms/index.ts
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  // 1. Supabase Secrets에 저장된 API 키를 불러옵니다.
+  const apiKey = Deno.env.get("PUBLIC_DATA_API_KEY");
+
+  if (!apiKey) {
+    // 키가 없으면 바로 오류 반환
+    return new Response(JSON.stringify({ error: "API 키가 설정되지 않았습니다." }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
+  // 2. (가장 중요) API 키를 URL에 사용할 수 있도록 인코딩합니다.
+  const encodedKey = encodeURIComponent(apiKey);
+
   try {
-    const { lat, lng, radius = 5000 } = await req.json(); // 기본 5km
+    // 3. API 호출 URL을 만듭니다.
+    // (예시: 사용자의 현재 위치 위도/경도를 req.json()으로 받았다고 가정)
+    const { lat, lon } = await req.json(); // 예시: { "lat": 37.5665, "lon": 126.9780 }
 
-    if (!lat || !lng) {
-      return new Response(
-        JSON.stringify({ error: 'lat and lng are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // 응급의료기관 정보조회 서비스(B552657)의 '주변 응급실 조회' 엔드포인트 예시입니다.
+    // (정확한 URL은 data.go.kr 문서에서 확인해야 합니다)
+    const API_URL = `http://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgyInfoList?WGS84_LON=${lon}&WGS84_LAT=${lat}&serviceKey=${encodedKey}&_type=json`;
 
-    const PUBLIC_DATA_API_KEY = Deno.env.get('PUBLIC_DATA_API_KEY');
-    if (!PUBLIC_DATA_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'PUBLIC_DATA_API_KEY not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // 4. fetch를 사용해 data.go.kr API를 호출합니다.
+    console.log("Calling API:", API_URL); // 로그 확인용
 
-    // Try multiple combinations to access the API
-    const endpoints = [
-      'https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytBassInfoInqire',
-      'http://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytBassInfoInqire',
-    ];
-    const keysToTry = [PUBLIC_DATA_API_KEY, encodeURIComponent(PUBLIC_DATA_API_KEY)];
-    const keyParamNames = ['serviceKey', 'ServiceKey'] as const;
+    const response = await fetch(API_URL, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
 
-    let response: Response | null = null;
-    let lastStatus = 0;
-    let lastBody = '';
-    let lastUrl = '';
+    if (!response.ok) {
+      // API 서버가 401, 404, 500 등 오류를 반환한 경우
+      console.error("API Error Status:", response.status);
+      const errorText = await response.text();
+      console.error("API Error Body:", errorText);
 
-    for (const baseUrl of endpoints) {
-      for (const key of keysToTry) {
-        for (const keyName of keyParamNames) {
-          const params = new URLSearchParams({
-            WGS84_LON: lng.toString(),
-            WGS84_LAT: lat.toString(),
-            pageNo: '1',
-            numOfRows: '30',
-          });
-          params.set(keyName, key);
-          const url = `${baseUrl}?${params.toString()}`;
-          lastUrl = url;
-          
-          console.log(`Trying: ${url.substring(0, 100)}...`);
-          
-          const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-          if (res.ok) { 
-            response = res; 
-            console.log('Success with:', baseUrl, keyName);
-            break; 
-          }
-          lastStatus = res.status;
-          lastBody = await res.text();
-          console.error('Error', lastStatus, lastBody.slice(0, 200));
-        }
-        if (response) break;
+      // 401 오류가 여기서 발생합니다.
+      if (response.status === 401) {
+        throw new Error("Unauthorized: API 키에 권한이 없거나 잘못되었습니다.");
       }
-      if (response) break;
+      throw new Error(`API 호출 실패: ${response.status} ${errorText}`);
     }
 
-    if (!response) {
-      // Fallback to Kakao Local Search filtering by "응급"
-      try {
-        const KAKAO_REST_API_KEY = Deno.env.get('KAKAO_REST_API_KEY');
-        if (KAKAO_REST_API_KEY) {
-          const radiusMeters = Math.min(Math.round((radius / 1000) * 1000), 20000);
-          const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=응급실&x=${lng}&y=${lat}&radius=${radiusMeters}&size=30&sort=distance`;
-          console.warn('Emergency API failed. Falling back to Kakao:', kakaoUrl);
-          const kakaoRes = await fetch(kakaoUrl, {
-            headers: { Authorization: `KakaoAK ${KAKAO_REST_API_KEY}` },
-          });
-          if (kakaoRes.ok) {
-            const kakaoData = await kakaoRes.json();
-            const docs = Array.isArray(kakaoData?.documents) ? kakaoData.documents : [];
-            const emergencyRooms = docs.map((d: any) => ({
-              hpid: d.id,
-              dutyName: d.place_name,
-              dutyAddr: d.road_address_name || d.address_name,
-              dutyTel3: d.phone || '',
-              dutyTel1: d.phone || '',
-              wgs84Lat: d.y,
-              wgs84Lon: d.x,
-              hvec: '0',
-            }));
-            return new Response(
-              JSON.stringify({ emergencyRooms }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-        }
-      } catch (fbErr) {
-        console.error('Kakao fallback error:', fbErr);
-      }
+    const data = await response.json();
 
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch emergency rooms', status: lastStatus, details: lastBody || 'All attempts failed', lastUrl }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const text = await response.text();
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch (_) {
-      console.error('Non-JSON response:', text.slice(0, 300));
-      return new Response(
-        JSON.stringify({ error: 'Non-JSON response', details: text.slice(0, 500) }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    console.log('API Response OK:', JSON.stringify(data).substring(0, 500));
-
-    // Parse response and extract emergency room data
-    const items = data?.response?.body?.items?.item || [];
-    const emergencyRooms = Array.isArray(items) ? items : [items];
-
-    return new Response(
-      JSON.stringify({ emergencyRooms }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    // 5. 성공한 데이터를 클라이언트(웹)에 반환합니다.
+    return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
   } catch (error) {
-    console.error('Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // 401 오류 포함 모든 예외 처리
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 });
