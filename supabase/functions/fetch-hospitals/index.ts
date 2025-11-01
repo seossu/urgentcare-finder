@@ -30,17 +30,17 @@ serve(async (req) => {
       );
     }
 
-    // Kakao constraints: radius up to 20000m, size up to 45 per page
+    // Kakao constraints: radius up to 20000m, size up to 15 per page
     const radiusMeters = Math.max(0, Math.min(Math.round((Number(radiusKm) || 5) * 1000), 20000));
-    const rows = Math.max(1, Math.min(Number(numOfRows) || 100, 100));
-    const pageSize = Math.min(rows, 45);
+    const rows = Math.max(1, Math.min(Number(numOfRows) || 300, 300));
+    const pageSize = 15; // Kakao API maximum size limit
 
     const headers = { Authorization: `KakaoAK ${KAKAO_REST_API_KEY}` };
 
     const collected: any[] = [];
     let page = 1;
-    // Keep it simple and fast: fetch up to 3 pages max
-    while (collected.length < rows && page <= 3) {
+    // Fetch up to 5 pages to get more results (15 * 5 = 75 hospitals)
+    while (collected.length < rows && page <= 5) {
       const kakaoUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=${radiusMeters}&size=${pageSize}&page=${page}&sort=distance`;
       const res = await fetch(kakaoUrl, { headers });
       const text = await res.text();
