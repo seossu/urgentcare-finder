@@ -21,113 +21,79 @@ serve(async (req) => {
       );
     }
 
-    // 1. Try Public Data Portal API
     const publicDataApiKey = Deno.env.get("PUBLIC_DATA_API_KEY");
     
-    if (publicDataApiKey) {
-      const encodedKey = encodeURIComponent(publicDataApiKey);
-      const publicDataUrl = `http://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytBassInfoInqire?WGS84_LON=${lng}&WGS84_LAT=${lat}&pageNo=1&numOfRows=30&serviceKey=${encodedKey}`;
-      
-      console.info(`Trying Public Data API: ${publicDataUrl.substring(0, 100)}...`);
-      
-      try {
-        const response = await fetch(publicDataUrl, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Check if data is valid
-          if (data.response?.body?.items?.item) {
-            console.info("Successfully fetched from Public Data API");
-            return new Response(
-              JSON.stringify(data),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        } else {
-          console.error(`Public Data API Error: ${response.status} ${response.statusText}`);
-        }
-      } catch (err) {
-        console.error("Public Data API fetch failed:", err);
-      }
-    }
-
-    // 2. Fallback to Kakao Local Search
-    console.warn("Falling back to Kakao Local Search");
-    
-    const kakaoApiKey = Deno.env.get("KAKAO_REST_API_KEY");
-    
-    if (!kakaoApiKey) {
+    if (!publicDataApiKey) {
       return new Response(
         JSON.stringify({ error: "API 키가 설정되지 않았습니다." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=응급실&category_group_code=HP8&x=${lng}&y=${lat}&radius=${radius}&size=30&sort=distance`;
-    
-    console.info(`Trying Kakao API: ${kakaoUrl}`);
-    
-    const kakaoResponse = await fetch(kakaoUrl, {
-      headers: {
-        Authorization: `KakaoAK ${kakaoApiKey}`,
-      },
-    });
+    // Try different endpoints for 응급의료기관 API
+    const endpoints = [
+      `http://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytListInfoInqire?WGS84_LON=${lng}&WGS84_LAT=${lat}&pageNo=1&numOfRows=30`,
+      `http://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire?STAGE1=서울&pageNo=1&numOfRows=100`,
+      `http://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytBassInfoInqire?WGS84_LON=${lng}&WGS84_LAT=${lat}&pageNo=1&numOfRows=30`,
+    ];
 
-    if (!kakaoResponse.ok) {
-      const errorText = await kakaoResponse.text();
-      console.error(`Kakao API Error: ${kakaoResponse.status}`, errorText);
-      throw new Error(`Kakao API 호출 실패: ${kakaoResponse.status}`);
+    for (const endpoint of endpoints) {
+      try {
+        const url = `${endpoint}&serviceKey=${encodeURIComponent(publicDataApiKey)}`;
+        console.info(`Trying endpoint: ${url.substring(0, 120)}...`);
+        
+        const response = await fetch(url, {
+          method: "GET",
+          headers: { 
+            Accept: "application/json",
+          },
+        });
+
+        console.info(`Response status: ${response.status}`);
+        
+        if (response.ok) {
+          const text = await response.text();
+          console.info(`Response text (first 200 chars): ${text.substring(0, 200)}`);
+          
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            console.error("Failed to parse JSON:", e);
+            continue;
+          }
+
+          // Check various response structures
+          const items = data.response?.body?.items?.item || 
+                       data.response?.body?.items || 
+                       [];
+          
+          if (Array.isArray(items) && items.length > 0) {
+            console.info(`Success! Found ${items.length} items`);
+            return new Response(
+              JSON.stringify(data),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.warn(`No items found in response for endpoint: ${endpoint}`);
+          }
+        } else {
+          const errorText = await response.text();
+          console.error(`Error ${response.status}: ${errorText.substring(0, 200)}`);
+        }
+      } catch (err) {
+        console.error(`Failed to fetch from ${endpoint}:`, err);
+      }
     }
 
-    const kakaoData = await kakaoResponse.json();
-    
-    // Filter to only include emergency rooms - stricter filtering
-    const filteredDocuments = kakaoData.documents.filter((doc: any) => {
-      const name = doc.place_name.toLowerCase();
-      const category = doc.category_name.toLowerCase();
-      
-      // Must NOT be pharmacy
-      if (category.includes('약국') || name.includes('약국')) {
-        return false;
-      }
-      
-      // Must be hospital AND (have emergency or be general hospital)
-      const isHospital = category.includes('병원') || category.includes('의료');
-      const hasEmergency = name.includes('응급') || name.includes('병원') || name.includes('센터');
-      
-      return isHospital && hasEmergency;
-    });
-    
-    // Transform Kakao data to match expected format
-    const transformedData = {
-      response: {
-        body: {
-          items: {
-            item: filteredDocuments.map((doc: any) => ({
-              dutyName: doc.place_name,
-              dutyAddr: doc.address_name,
-              dutyTel1: doc.phone || "정보 없음",
-              wgs84Lat: parseFloat(doc.y),
-              wgs84Lon: parseFloat(doc.x),
-              distance: doc.distance,
-              // Kakao doesn't provide bed info
-              hvec: null,
-              hvoc: null,
-            }))
-          },
-          totalCount: kakaoData.meta.total_count,
-        }
-      },
-      source: "kakao" // Indicate this is from Kakao
-    };
-
+    // If all endpoints fail, return error
+    console.error("All Public Data API endpoints failed");
     return new Response(
-      JSON.stringify(transformedData),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ 
+        error: "응급의료기관 API에서 데이터를 가져올 수 없습니다. API 키와 서비스 신청 상태를 확인해주세요.",
+        details: "모든 API endpoint에서 데이터를 가져오는데 실패했습니다."
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
