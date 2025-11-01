@@ -82,30 +82,36 @@ const Clinic = () => {
             const hospitalData = await hospitalResponse.json();
             
             if (hospitalData.emergencyRooms && hospitalData.emergencyRooms.length > 0) {
-              // Filter out pharmacies and emergency rooms, keep only general hospitals
-              const hospitalsWithDistance = hospitalData.emergencyRooms
-                .filter((item: any) => item.dutyEryn !== 2 && item.dutyEryn !== 1) // Exclude pharmacies and emergency rooms
-                .map((hospital: any) => ({
-                  id: hospital.hpid || Math.random().toString(),
-                  name: hospital.dutyName || '이름 없음',
-                  phone: hospital.dutyTel1 || '연락처 없음',
-                  address: hospital.dutyAddr || '주소 없음',
-                  lat: parseFloat(hospital.wgs84Lat) || lat,
-                  lng: parseFloat(hospital.wgs84Lon) || lng,
-                  department: "일반",
-                  isOpen: true,
-                  closingTime: "18:00",
-                  hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
-                  hasNaverBooking: false,
-                  calculatedDistance: calculateDistance(
-                    lat,
-                    lng,
-                    parseFloat(hospital.wgs84Lat) || lat,
-                    parseFloat(hospital.wgs84Lon) || lng
-                  ),
-                }))
-                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
-                .slice(0, 30) // Get only nearest 30
+              // Build list: general hospitals/clinics only (exclude pharmacies and emergency centers)
+              const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
+              const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
+
+              const normalized = hospitalData.emergencyRooms
+                .filter((item: any) => !isPharmacy(item))
+                .map((hospital: any) => {
+                  const latNum = parseFloat(hospital.wgs84Lat) || lat;
+                  const lonNum = parseFloat(hospital.wgs84Lon) || lng;
+                  return {
+                    id: hospital.hpid || Math.random().toString(),
+                    name: hospital.dutyName || '이름 없음',
+                    phone: hospital.dutyTel1 || '연락처 없음',
+                    address: hospital.dutyAddr || '주소 없음',
+                    lat: latNum,
+                    lng: lonNum,
+                    department: "일반",
+                    isOpen: true,
+                    closingTime: "18:00",
+                    hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
+                    hasNaverBooking: false,
+                    calculatedDistance: calculateDistance(lat, lng, latNum, lonNum),
+                    __isEmergency: isEmergency(hospital),
+                  };
+                })
+                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance);
+
+              const hospitalsWithDistance = normalized
+                .filter((h: any) => !h.__isEmergency)
+                .slice(0, 30)
                 .map((hospital: any) => ({
                   ...hospital,
                   distance: `${hospital.calculatedDistance.toFixed(1)}km`,

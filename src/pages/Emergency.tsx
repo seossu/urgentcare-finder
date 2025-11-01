@@ -71,28 +71,37 @@ const Emergency = () => {
             const emergencyData = await emergencyResponse.json();
             
             if (emergencyData.emergencyRooms && emergencyData.emergencyRooms.length > 0) {
-              // Filter emergency rooms only (exclude pharmacies and non-emergency facilities)
-              const roomsWithDistance = emergencyData.emergencyRooms
-                .filter((room: any) => room.dutyEryn === 1) // Only emergency rooms
-                .map((room: any) => ({
-                  id: room.hpid || Math.random().toString(),
-                  name: room.dutyName || '이름 없음',
-                  phone: room.dutyTel1 || '연락처 없음',
-                  address: room.dutyAddr || '주소 없음',
-                  lat: parseFloat(room.wgs84Lat) || lat,
-                  lng: parseFloat(room.wgs84Lon) || lng,
-                  totalBeds: parseInt(room.hvec) || 0,
-                  availableBeds: parseInt(room.hvec) || 0,
-                  doctors: ["응급의학과"],
-                  calculatedDistance: calculateDistance(
-                    lat,
-                    lng,
-                    parseFloat(room.wgs84Lat) || lat,
-                    parseFloat(room.wgs84Lon) || lng
-                  ),
-                }))
-                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
-                .slice(0, 30) // Get only nearest 30
+              // Build list: prioritize emergency hospitals, exclude pharmacies
+              const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
+              const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
+
+              const normalized = emergencyData.emergencyRooms
+                .filter((room: any) => !isPharmacy(room))
+                .map((room: any) => {
+                  const latNum = parseFloat(room.wgs84Lat) || lat;
+                  const lonNum = parseFloat(room.wgs84Lon) || lng;
+                  const dist = calculateDistance(lat, lng, latNum, lonNum);
+                  return {
+                    id: room.hpid || Math.random().toString(),
+                    name: room.dutyName || '이름 없음',
+                    phone: room.dutyTel1 || '연락처 없음',
+                    address: room.dutyAddr || '주소 없음',
+                    lat: latNum,
+                    lng: lonNum,
+                    totalBeds: parseInt(room.hvec) || 0,
+                    availableBeds: parseInt(room.hvec) || 0,
+                    doctors: ["응급의학과"],
+                    calculatedDistance: dist,
+                    __isEmergency: isEmergency(room),
+                  };
+                })
+                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance);
+
+              const roomsWithDistance = [
+                ...normalized.filter((r: any) => r.__isEmergency),
+                ...normalized.filter((r: any) => !r.__isEmergency),
+              ]
+                .slice(0, 30)
                 .map((room: any) => ({
                   ...room,
                   distance: `${room.calculatedDistance.toFixed(1)}km`,
