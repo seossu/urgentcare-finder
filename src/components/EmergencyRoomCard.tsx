@@ -12,19 +12,11 @@ interface EmergencyRoomCardProps {
 
 export const EmergencyRoomCard = ({ room, currentAddress, currentLat, currentLng }: EmergencyRoomCardProps) => {
   const handleNavigation = () => {
-    // Use coordinates for precise navigation
-    if (currentLat && currentLng && room.wgs84Lon && room.wgs84Lat) {
-      const startName = encodeURIComponent(currentAddress || "현재 위치");
-      const endName = encodeURIComponent(room.dutyName);
-      const naverMapUrl = `https://map.naver.com/v5/directions/${currentLng},${currentLat},${startName}/${room.wgs84Lon},${room.wgs84Lat},${endName}`;
-      window.open(naverMapUrl, "_blank");
-    } else {
-      // Fallback to address-based search
-      const start = currentAddress || "내 위치";
-      const destination = room.dutyAddr || room.dutyName;
-      const naverMapUrl = `https://map.naver.com/v5/directions/${encodeURIComponent(start)}/${encodeURIComponent(destination)}`;
-      window.open(naverMapUrl, "_blank");
-    }
+    const start = currentAddress || "내 위치";
+    const destination = room.dutyAddr || room.dutyName;
+    // Add /car at the end to automatically start route search
+    const naverMapUrl = `https://map.naver.com/v5/directions/${encodeURIComponent(start)}/${encodeURIComponent(destination)}/car`;
+    window.open(naverMapUrl, "_blank");
   };
 
   return (
