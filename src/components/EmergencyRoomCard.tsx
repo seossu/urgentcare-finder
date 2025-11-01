@@ -12,7 +12,7 @@ export const EmergencyRoomCard = ({ room, currentAddress }: EmergencyRoomCardPro
   const handleNavigation = () => {
     const start = currentAddress || "내 위치";
     const destination = room.dutyAddr || room.dutyName;
-    const naverMapUrl = `https://map.naver.com/v5/directions/-/-/-/${encodeURIComponent(start)}/${encodeURIComponent(destination)}`;
+    const naverMapUrl = `https://map.naver.com/v5/directions/${encodeURIComponent(start)}/${encodeURIComponent(destination)}`;
     window.open(naverMapUrl, "_blank");
   };
 
