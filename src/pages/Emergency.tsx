@@ -168,16 +168,16 @@ const Emergency = () => {
     }
   }, []);
 
-  const handleNavigation = (hospitalName: string, hospitalAddress: string) => {
-    if (!userLocation || !userLocation.address) {
+  const handleNavigation = (hospitalLat: number, hospitalLng: number, hospitalName: string) => {
+    if (!userLocation) {
       toast.error("현재 위치를 가져오는 중입니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 
-    // Naver Map directions URL with road addresses
-    const startAddress = encodeURIComponent(userLocation.address);
-    const endAddress = encodeURIComponent(hospitalAddress);
-    const naverMapUrl = `https://map.naver.com/v5/directions/-/-/-/transit?c=15,0,0,0,dh&start=${startAddress}&destination=${endAddress}`;
+    // Naver Map directions URL with coordinates (automatically fills start and end points)
+    const startPoint = `${userLocation.lng},${userLocation.lat},현재위치`;
+    const endPoint = `${hospitalLng},${hospitalLat},${encodeURIComponent(hospitalName)}`;
+    const naverMapUrl = `https://map.naver.com/v5/directions/${startPoint}/${endPoint}/-/transit`;
     
     window.open(naverMapUrl, "_blank");
   };
@@ -345,7 +345,7 @@ const Emergency = () => {
                     {room.phone}
                   </a>
                 </Button>
-                <Button onClick={() => handleNavigation(room.name, room.address)}>
+                <Button onClick={() => handleNavigation(room.lat, room.lng, room.name)}>
                   <Navigation className="h-4 w-4 mr-2" />
                   길찾기
                 </Button>
