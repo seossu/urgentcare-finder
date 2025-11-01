@@ -59,6 +59,7 @@ const checkHospitalStatus = (startTime: string, endTime: string): { isOpen: bool
 
 // Extract department from hospital name
 const extractDepartment = (name: string): string => {
+  if (name.includes("가정의학과")) return "가정의학과";
   if (name.includes("내과")) return "내과";
   if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
   if (name.includes("정형외과")) return "정형외과";
@@ -401,6 +402,7 @@ const Clinic = () => {
         // If AI recommends a specific department, filter hospitals by that department
         if (data.department) {
           const departmentMapping: { [key: string]: string } = {
+            "가정의학과": "family",
             "내과": "internal",
             "소아청소년과": "pediatrics",
             "정형외과": "orthopedics",
@@ -410,6 +412,7 @@ const Clinic = () => {
             "산부인과": "obgyn",
             "치과": "dental",
             "한의원": "korean",
+            "정신건강의학과": "psychiatry",
           };
           
           const mappedDepartment = departmentMapping[data.department];
@@ -496,6 +499,7 @@ const Clinic = () => {
   // Filter by department
   if (department !== "all") {
     const departmentMap: { [key: string]: string[] } = {
+      family: ["가정의학과"],
       internal: ["내과"],
       pediatrics: ["소아청소년과"],
       orthopedics: ["정형외과"],
@@ -505,6 +509,7 @@ const Clinic = () => {
       obgyn: ["산부인과"],
       dental: ["치과"],
       korean: ["한의원"],
+      psychiatry: ["정신건강의학과"],
     };
     const targetDepartments = departmentMap[department] || [];
     clinics = clinics.filter((clinic) =>
@@ -542,6 +547,7 @@ const Clinic = () => {
 
   const departments = [
     { value: "all", label: "전체" },
+    { value: "family", label: "가정의학과" },
     { value: "internal", label: "내과" },
     { value: "pediatrics", label: "소아청소년과" },
     { value: "orthopedics", label: "정형외과" },
@@ -551,6 +557,7 @@ const Clinic = () => {
     { value: "obgyn", label: "산부인과" },
     { value: "dental", label: "치과" },
     { value: "korean", label: "한의원" },
+    { value: "psychiatry", label: "정신건강의학과" },
   ];
 
   return (
