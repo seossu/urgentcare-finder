@@ -56,46 +56,67 @@ serve(async (req) => {
     
     if (region1) {
       const regionCode = REGION_CODE_MAP[region1];
+      console.info(`Looking up region code for: ${region1}, found: ${regionCode}`);
       
       if (regionCode) {
         try {
           const nemcUrl = `https://mediboard.nemc.or.kr/api/v1/search/handy?searchCondition=regional&emogloca=${regionCode}`;
-          console.info(`Fetching real-time bed info from NEMC for region ${region1} (code: ${regionCode})`);
+          console.info(`Fetching NEMC API: ${nemcUrl}`);
           
           const nemcResponse = await fetch(nemcUrl, {
             method: "GET",
             headers: { Accept: "application/json" },
           });
           
+          console.info(`NEMC API response status: ${nemcResponse.status}`);
+          
           if (nemcResponse.ok) {
             const nemcData = await nemcResponse.json();
-            const hospitals = nemcData.hospitalList || [];
+            console.info(`NEMC API response: ${nemcData.message || 'No message'}`);
+            
+            // NEMC API structure: { result: { count: N, data: [...] } }
+            let hospitals = [];
+            if (nemcData.result && Array.isArray(nemcData.result.data)) {
+              hospitals = nemcData.result.data;
+            }
             
             console.info(`NEMC API: Found ${hospitals.length} hospitals with real-time bed info`);
             
-            // Map NEMC data by hospital ID
+            if (hospitals.length > 0) {
+              console.info(`Sample NEMC hospital: ${JSON.stringify(hospitals[0]).substring(0, 300)}`);
+            }
+            
+            // Map NEMC data by hospital code (emogCode) and name for flexible matching
             hospitals.forEach((hospital: any) => {
-              // NEMC uses 'hpid' field for hospital ID
-              if (hospital.hpid) {
-                realtimeBedData.set(hospital.hpid, {
-                  totalBeds: parseInt(hospital.hvec) || 0,  // 응급실 병상수
-                  availableBeds: parseInt(hospital.hvoc) || 0,  // 수술실 병상수
-                  erAvailable: hospital.hvec ? parseInt(hospital.hvec) - (parseInt(hospital.hv1) || 0) : 0,  // 응급실 가용 병상
-                  erStatus: hospital.MKioskTy25 || '',  // 응급실 포화도
-                  lastUpdated: hospital.hvidate || '',  // 업데이트 시간
-                });
+              const bedInfo = {
+                totalBeds: parseInt(hospital.generalEmergencyTotal || '0') + parseInt(hospital.childEmergencyTotal || '0'),
+                availableBeds: parseInt(hospital.generalEmergencyAvailable || '0') + parseInt(hospital.childEmergencyAvailable || '0'),
+                erAvailable: parseInt(hospital.generalEmergencyAvailable || '0') + parseInt(hospital.childEmergencyAvailable || '0'),
+                erStatus: hospital.emergencyInstitutionType || '',
+                lastUpdated: '',  // NEMC API doesn't provide this
+              };
+              
+              // Try to match by emogCode (which might be same as hpid)
+              if (hospital.emogCode) {
+                realtimeBedData.set(hospital.emogCode, bedInfo);
+              }
+              
+              // Also map by hospital name for fallback matching
+              if (hospital.emergencyRoomName) {
+                realtimeBedData.set(hospital.emergencyRoomName, bedInfo);
               }
             });
             
-            console.info(`Mapped ${realtimeBedData.size} hospitals with real-time bed data`);
+            console.info(`Total mapped: ${realtimeBedData.size} hospital bed data entries`);
           } else {
-            console.warn(`NEMC API error ${nemcResponse.status}`);
+            const errorText = await nemcResponse.text();
+            console.error(`NEMC API error ${nemcResponse.status}: ${errorText}`);
           }
         } catch (err) {
           console.error("Failed to fetch NEMC real-time bed info:", err);
         }
       } else {
-        console.warn(`No region code mapping for ${region1}`);
+        console.warn(`No region code mapping for region: "${region1}"`);
       }
     } else {
       console.warn("No region1 provided, skipping NEMC real-time bed info");
@@ -144,7 +165,20 @@ serve(async (req) => {
             
             // Enrich items with real-time bed data from NEMC
             const enrichedItems = items.map((item: any) => {
-              const bedInfo = realtimeBedData.get(item.hpid);
+              // Try to match by hpid first, then by hospital name
+              let bedInfo = realtimeBedData.get(item.hpid);
+              
+              if (!bedInfo && item.dutyName) {
+                // Try to find a partial name match
+                for (const [key, value] of realtimeBedData.entries()) {
+                  if (typeof key === 'string' && key.includes(item.dutyName.substring(0, 5))) {
+                    bedInfo = value;
+                    console.info(`Matched ${item.dutyName} by name to ${key}`);
+                    break;
+                  }
+                }
+              }
+              
               if (bedInfo) {
                 console.info(`Enriched ${item.dutyName} with NEMC real-time bed info`);
                 return { 
