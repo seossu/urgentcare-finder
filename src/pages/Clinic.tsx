@@ -29,9 +29,15 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 const Clinic = () => {
   const navigate = useNavigate();
+  // Applied filters
   const [distance, setDistance] = useState("3");
   const [department, setDepartment] = useState("all");
   const [sortBy, setSortBy] = useState("distance");
+  // Temporary filters for selection
+  const [tempDistance, setTempDistance] = useState("3");
+  const [tempDepartment, setTempDepartment] = useState("all");
+  const [tempSortBy, setTempSortBy] = useState("distance");
+  
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
   const [hospitals, setHospitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,6 +159,12 @@ const Clinic = () => {
     window.open(naverBookingUrl, "_blank");
   };
 
+  const handleApplyFilters = () => {
+    setDistance(tempDistance);
+    setDepartment(tempDepartment);
+    setSortBy(tempSortBy);
+  };
+
   // Mock data with coordinates (fallback if API fails)
   const clinicsData = [
     {
@@ -197,7 +209,7 @@ const Clinic = () => {
   ];
 
   // Use real data if available, otherwise use mock data
-  const clinics = hospitals.length > 0 ? hospitals :
+  let clinics = hospitals.length > 0 ? hospitals :
     userLocation
       ? clinicsData
           .map((clinic) => ({
@@ -215,6 +227,47 @@ const Clinic = () => {
             distance: `${clinic.calculatedDistance.toFixed(1)}km`,
           }))
       : clinicsData.map((clinic) => ({ ...clinic, distance: "계산 중..." }));
+
+  // Apply filters and sorting
+  // Filter by department
+  if (department !== "all") {
+    const departmentMap: { [key: string]: string[] } = {
+      internal: ["내과"],
+      pediatrics: ["소아청소년과"],
+      orthopedics: ["정형외과"],
+      dermatology: ["피부과"],
+      ent: ["이비인후과"],
+    };
+    const targetDepartments = departmentMap[department] || [];
+    clinics = clinics.filter((clinic) =>
+      targetDepartments.some((dept) => clinic.department?.includes(dept))
+    );
+  }
+
+  // Filter by distance
+  const maxDistance = parseFloat(distance);
+  clinics = clinics.filter((clinic) => {
+    const distanceValue = parseFloat(clinic.distance);
+    return !isNaN(distanceValue) && distanceValue <= maxDistance;
+  });
+
+  // Sort by selected method
+  if (sortBy === "distance") {
+    clinics = clinics.sort((a, b) => {
+      const distA = parseFloat(a.distance) || 999;
+      const distB = parseFloat(b.distance) || 999;
+      return distA - distB;
+    });
+  } else if (sortBy === "open") {
+    clinics = clinics.sort((a, b) => {
+      if (a.isOpen === b.isOpen) {
+        const distA = parseFloat(a.distance) || 999;
+        const distB = parseFloat(b.distance) || 999;
+        return distA - distB;
+      }
+      return a.isOpen ? -1 : 1;
+    });
+  }
 
   const departments = [
     { value: "all", label: "전체" },
@@ -264,7 +317,7 @@ const Clinic = () => {
 
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Select value={distance} onValueChange={setDistance}>
+            <Select value={tempDistance} onValueChange={setTempDistance}>
               <SelectTrigger>
                 <SelectValue placeholder="거리 선택" />
               </SelectTrigger>
@@ -276,7 +329,7 @@ const Clinic = () => {
               </SelectContent>
             </Select>
 
-            <Select value={department} onValueChange={setDepartment}>
+            <Select value={tempDepartment} onValueChange={setTempDepartment}>
               <SelectTrigger>
                 <SelectValue placeholder="진료과 선택" />
               </SelectTrigger>
@@ -289,7 +342,7 @@ const Clinic = () => {
               </SelectContent>
             </Select>
 
-            <Select value={sortBy} onValueChange={setSortBy}>
+            <Select value={tempSortBy} onValueChange={setTempSortBy}>
               <SelectTrigger>
                 <SelectValue placeholder="정렬 방식" />
               </SelectTrigger>
@@ -300,6 +353,11 @@ const Clinic = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Apply Filters Button */}
+          <Button onClick={handleApplyFilters} className="w-full">
+            확인
+          </Button>
         </div>
       </div>
 
