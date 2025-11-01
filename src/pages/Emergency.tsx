@@ -70,8 +70,11 @@ const Emergency = () => {
             );
             const emergencyData = await emergencyResponse.json();
             
-            if (emergencyData.emergencyRooms && emergencyData.emergencyRooms.length > 0) {
-              const normalized = emergencyData.emergencyRooms
+            // Handle both Public Data API and Kakao API response formats
+            const items = emergencyData.response?.body?.items?.item || [];
+            
+            if (items.length > 0) {
+              const normalized = items
                 .map((room: any) => {
                   const latNum = parseFloat(room.wgs84Lat) || lat;
                   const lonNum = parseFloat(room.wgs84Lon) || lng;
