@@ -6,12 +6,13 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { lat, lng, radiusKm = 5, numOfRows = 300 } = await req.json();
+    const { lat, lng, radiusKm = 5, numOfRows = 100 } = await req.json();
 
     if (!lat || !lng) {
       return new Response(
@@ -20,183 +21,66 @@ serve(async (req) => {
       );
     }
 
-    const PUBLIC_DATA_API_KEY = Deno.env.get('PUBLIC_DATA_API_KEY');
-    if (!PUBLIC_DATA_API_KEY) {
+    // Primary data source: Kakao Local Search (Hospitals: HP8)
+    const KAKAO_REST_API_KEY = Deno.env.get('KAKAO_REST_API_KEY');
+    if (!KAKAO_REST_API_KEY) {
       return new Response(
-        JSON.stringify({ error: 'PUBLIC_DATA_API_KEY not configured' }),
+        JSON.stringify({ error: 'KAKAO_REST_API_KEY not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Build request with retries across endpoints and key encodings
-    const radiusMeters = Math.min(Math.round(radiusKm * 1000), 5000);
-    const rows = Math.min(Number(numOfRows) || 100, 100);
+    // Kakao constraints: radius up to 20000m, size up to 45 per page
+    const radiusMeters = Math.max(0, Math.min(Math.round((Number(radiusKm) || 5) * 1000), 20000));
+    const rows = Math.max(1, Math.min(Number(numOfRows) || 100, 100));
+    const pageSize = Math.min(rows, 45);
 
-    const endpoints = [
-      'https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList',
-      'http://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList',
-      'https://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1',
-      'http://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1',
-    ];
-    const keysToTry = [PUBLIC_DATA_API_KEY, encodeURIComponent(PUBLIC_DATA_API_KEY)];
-    const keyParamNames = ['ServiceKey', 'serviceKey'] as const;
-    const typeParamNames = ['_type', 'type'] as const;
+    const headers = { Authorization: `KakaoAK ${KAKAO_REST_API_KEY}` };
 
-    let response: Response | null = null;
-    let lastStatus = 0;
-    let lastBody = '';
-    let lastUrl = '';
-
-    for (const baseUrl of endpoints) {
-      for (const key of keysToTry) {
-        for (const keyName of keyParamNames) {
-          for (const typeName of typeParamNames) {
-            const params = new URLSearchParams({
-              xPos: String(lng),
-              yPos: String(lat),
-              radius: String(radiusMeters),
-              pageNo: '1',
-              numOfRows: String(rows),
-            });
-            params.set(keyName, key);
-            params.set(typeName, 'json');
-            const url = `${baseUrl}?${params.toString()}`;
-            lastUrl = url;
-            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            if (res.ok) { response = res; break; }
-            lastStatus = res.status;
-            lastBody = await res.text();
-            console.error('Upstream error', lastStatus, url, lastBody.slice(0, 200));
-          }
-          if (response) break;
-        }
-        if (response) break;
+    const collected: any[] = [];
+    let page = 1;
+    // Keep it simple and fast: fetch up to 3 pages max
+    while (collected.length < rows && page <= 3) {
+      const kakaoUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=${radiusMeters}&size=${pageSize}&page=${page}&sort=distance`;
+      const res = await fetch(kakaoUrl, { headers });
+      const text = await res.text();
+      if (!res.ok) {
+        console.error('Kakao API error:', res.status, text.slice(0, 300));
+        break;
       }
-      if (response) break;
-    }
-
-    if (!response) {
-      // Fallback to Kakao Local Search (Hospitals) when Public Data API fails
+      let data: any;
       try {
-        const KAKAO_REST_API_KEY = Deno.env.get('KAKAO_REST_API_KEY');
-        if (KAKAO_REST_API_KEY) {
-          const kakaoRadius = Math.min(radiusMeters, 20000);
-          const kakaoUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=${kakaoRadius}&size=${Math.min(rows, 45)}`;
-          console.warn('HIRA upstream failed. Falling back to Kakao Local API:', { lastStatus, lastUrl, kakaoUrl });
-          const kakaoRes = await fetch(kakaoUrl, {
-            headers: { Authorization: `KakaoAK ${KAKAO_REST_API_KEY}` },
-          });
-          const kakaoText = await kakaoRes.text();
-          if (!kakaoRes.ok) {
-            console.error('Kakao API error:', kakaoRes.status, kakaoText.slice(0, 300));
-          } else {
-            const kakaoData = JSON.parse(kakaoText);
-            const docs = Array.isArray(kakaoData?.documents) ? kakaoData.documents : [];
-            const hospitals = docs.map((d: any) => ({
-              hpid: d.id,
-              dutyName: d.place_name,
-              dutyAddr: d.road_address_name || d.address_name,
-              dutyTel1: d.phone || '',
-              wgs84Lat: d.y,
-              wgs84Lon: d.x,
-              dutyEryn: 0, // Unknown from Kakao
-            }));
-            return new Response(
-              JSON.stringify({ hospitals }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-        } else {
-          console.warn('KAKAO_REST_API_KEY not configured; cannot use fallback');
-        }
-      } catch (fbErr) {
-        console.error('Kakao fallback error:', fbErr);
+        data = JSON.parse(text);
+      } catch (_) {
+        console.error('Kakao returned non-JSON. First 200 chars:', text.slice(0, 200));
+        break;
       }
 
-      // If fallback also fails, return original error
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch hospitals', status: lastStatus || 502, details: lastBody || 'Unknown upstream error' }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const docs = Array.isArray(data?.documents) ? data.documents : [];
+      if (!docs.length) break;
+      collected.push(...docs);
+
+      // Stop if meta says end
+      const isEnd = data?.meta?.is_end === true;
+      if (isEnd) break;
+      page += 1;
     }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Public Data API error:', response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch hospitals', status: response.status, details: errorText }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const text = await response.text();
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch (_) {
-      console.error('Upstream returned non-JSON. First 300 chars:', text.slice(0, 300));
-      return new Response(
-        JSON.stringify({ error: 'Upstream returned non-JSON', status: 502, details: text.slice(0, 1000) }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const header = data?.response?.header;
-    if (!header || header?.resultCode !== '00') {
-      console.error('Public API header error:', header);
-
-      // Try Kakao fallback before returning error
-      try {
-        const KAKAO_REST_API_KEY = Deno.env.get('KAKAO_REST_API_KEY');
-        if (KAKAO_REST_API_KEY) {
-          const kakaoRadius = Math.min(radiusMeters, 20000);
-          const kakaoUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=${kakaoRadius}&size=${Math.min(rows, 45)}`;
-          console.warn('Header error from HIRA. Falling back to Kakao Local API:', { kakaoUrl });
-          const kakaoRes = await fetch(kakaoUrl, {
-            headers: { Authorization: `KakaoAK ${KAKAO_REST_API_KEY}` },
-          });
-          const kakaoText = await kakaoRes.text();
-          if (kakaoRes.ok) {
-            const kakaoData = JSON.parse(kakaoText);
-            const docs = Array.isArray(kakaoData?.documents) ? kakaoData.documents : [];
-            const hospitals = docs.map((d: any) => ({
-              hpid: d.id,
-              dutyName: d.place_name,
-              dutyAddr: d.road_address_name || d.address_name,
-              dutyTel1: d.phone || '',
-              wgs84Lat: d.y,
-              wgs84Lon: d.x,
-              dutyEryn: 0,
-            }));
-            return new Response(
-              JSON.stringify({ hospitals }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          } else {
-            console.error('Kakao API error (header fallback):', kakaoRes.status, kakaoText.slice(0, 300));
-          }
-        }
-      } catch (fbErr) {
-        console.error('Kakao fallback error (header):', fbErr);
-      }
-
-      return new Response(
-        JSON.stringify({ error: 'Upstream error', status: 502, resultCode: header?.resultCode, resultMsg: header?.resultMsg }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('API Response OK');
-
-    // Parse response and extract hospital data
-    const items = data?.response?.body?.items?.item || [];
-    const hospitals = Array.isArray(items) ? items : [items];
+    // Normalize into the structure used in the frontend
+    const hospitals = collected.slice(0, rows).map((d: any) => ({
+      hpid: d.id, // Kakao place id
+      dutyName: d.place_name,
+      dutyAddr: d.road_address_name || d.address_name || '',
+      dutyTel1: d.phone || '',
+      wgs84Lat: d.y, // latitude (string)
+      wgs84Lon: d.x, // longitude (string)
+      dutyEryn: 0, // unknown from Kakao; pages handle filtering
+    }));
 
     return new Response(
       JSON.stringify({ hospitals }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (error) {
     console.error('Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
