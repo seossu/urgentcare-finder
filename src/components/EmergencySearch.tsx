@@ -165,18 +165,18 @@ export const EmergencySearch = () => {
             };
             
             const fullRegionName = regionMap[data.region1] || data.region1;
+            const region2 = data.region2 || "";
+            
             setStage1(fullRegionName);
-            if (data.region2) {
-              setStage2(data.region2);
-            }
+            setStage2(region2);
             
             toast({
               title: "현재 위치 설정",
-              description: data.address || `${fullRegionName} ${data.region2 || ''}`,
+              description: data.address || `${fullRegionName} ${region2}`,
             });
 
-            // 자동으로 검색 실행
-            await handleSearch();
+            // 자동으로 검색 실행 (업데이트된 값으로 직접 검색)
+            await performSearch(fullRegionName, region2);
           }
         } catch (error) {
           console.error("현재 위치 조회 실패:", error);
@@ -200,17 +200,7 @@ export const EmergencySearch = () => {
     );
   };
 
-  const handleSearch = async () => {
-    if (!stage1) {
-      toast({
-        title: "지역을 선택해주세요",
-        description: "시도를 선택해야 합니다.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
+  const performSearch = async (region1: string, region2: string) => {
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-emergency-rooms`,
@@ -220,8 +210,8 @@ export const EmergencySearch = () => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ 
-            region1: stage1,
-            region2: stage2,
+            region1,
+            region2,
           }),
         }
       );
@@ -233,9 +223,9 @@ export const EmergencySearch = () => {
         let roomsArray = Array.isArray(items) ? items : [items];
         
         // Filter by stage2 (district) if selected
-        if (stage2) {
+        if (region2) {
           roomsArray = roomsArray.filter((room: EmergencyRoom) => 
-            room.dutyAddr?.includes(stage2)
+            room.dutyAddr?.includes(region2)
           );
         }
         
@@ -265,6 +255,20 @@ export const EmergencySearch = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = async () => {
+    if (!stage1) {
+      toast({
+        title: "지역을 선택해주세요",
+        description: "시도를 선택해야 합니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    await performSearch(stage1, stage2);
   };
 
   const selectedRegion = stage1 as RegionKey;
