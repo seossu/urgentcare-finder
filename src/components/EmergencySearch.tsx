@@ -134,7 +134,15 @@ export const EmergencySearch = () => {
 
       if (data.response?.header?.resultCode === "00") {
         const items = data.response.body.items?.item || [];
-        const roomsArray = Array.isArray(items) ? items : [items];
+        let roomsArray = Array.isArray(items) ? items : [items];
+        
+        // Filter by stage2 (district) if selected
+        if (stage2) {
+          roomsArray = roomsArray.filter((room: EmergencyRoom) => 
+            room.dutyAddr?.includes(stage2)
+          );
+        }
+        
         setEmergencyRooms(roomsArray);
 
         if (roomsArray.length === 0) {
