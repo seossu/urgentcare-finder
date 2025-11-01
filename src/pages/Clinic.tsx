@@ -41,6 +41,8 @@ const Clinic = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
   const [hospitals, setHospitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addressInput, setAddressInput] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
 
   useEffect(() => {
     // Get user's current location
@@ -185,6 +187,238 @@ const Clinic = () => {
     setSortBy(tempSortBy);
   };
 
+  const searchByAddress = async () => {
+    if (!addressInput.trim()) {
+      toast.error("주소를 입력해주세요");
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      // Convert address to coordinates using Kakao Geocoding API via Edge Function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-geocode`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ address: addressInput }),
+        }
+      );
+      const data = await response.json();
+
+      if (data.lat && data.lng) {
+        const lat = data.lat;
+        const lng = data.lng;
+        setUserLocation({ lat, lng, address: addressInput });
+
+        // Fetch hospitals from the new location
+        setLoading(true);
+        try {
+          const radiusKm = Number(distance) || 5;
+          const hospitalResponse = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ lat, lng, radiusKm, numOfRows: 300 }),
+            }
+          );
+          const hospitalData = await hospitalResponse.json();
+
+          if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
+            const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
+            const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
+
+            // Extract department from hospital name
+            const extractDepartment = (name: string): string => {
+              if (name.includes("내과")) return "내과";
+              if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
+              if (name.includes("정형외과")) return "정형외과";
+              if (name.includes("피부과")) return "피부과";
+              if (name.includes("이비인후과")) return "이비인후과";
+              if (name.includes("안과")) return "안과";
+              if (name.includes("산부인과")) return "산부인과";
+              if (name.includes("치과")) return "치과";
+              if (name.includes("한의원")) return "한의원";
+              if (name.includes("정신건강의학과") || name.includes("정신과")) return "정신건강의학과";
+              if (name.includes("비뇨기과")) return "비뇨기과";
+              if (name.includes("외과")) return "외과";
+              if (name.includes("신경과")) return "신경과";
+              if (name.includes("재활의학과")) return "재활의학과";
+              return "일반";
+            };
+
+            const normalized = hospitalData.hospitals
+              .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
+              .map((hospital: any) => {
+                const latNum = parseFloat(hospital.wgs84Lat) || lat;
+                const lonNum = parseFloat(hospital.wgs84Lon) || lng;
+                const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
+                const hospitalName = hospital.dutyName || '이름 없음';
+                return {
+                  id: hospital.hpid || Math.random().toString(),
+                  name: hospitalName,
+                  phone: hospital.dutyTel1 || '연락처 없음',
+                  address: hospital.dutyAddr || '주소 없음',
+                  lat: latNum,
+                  lng: lonNum,
+                  department: extractDepartment(hospitalName),
+                  isOpen: true,
+                  closingTime: "18:00",
+                  hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
+                  hasNaverBooking: false,
+                  calculatedDistance,
+                };
+              })
+              .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+              .slice(0, 30)
+              .map((hospital: any) => ({
+                ...hospital,
+                distance: `${hospital.calculatedDistance.toFixed(1)}km`,
+              }));
+
+            setHospitals(normalized);
+            toast.success("병원 정보를 불러왔습니다");
+          } else {
+            toast.error("주변에 병원이 없습니다");
+          }
+        } catch (error) {
+          console.error("병원 정보 조회 실패:", error);
+          toast.error("병원 정보를 가져올 수 없습니다");
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        toast.error("주소를 찾을 수 없습니다. 정확한 주소를 입력해주세요.");
+      }
+    } catch (error) {
+      console.error("주소 검색 실패:", error);
+      toast.error("주소 검색에 실패했습니다");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const getCurrentLocation = () => {
+    setLoading(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          setUserLocation({ lat, lng });
+
+          try {
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-reverse-geocode`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ lat, lng }),
+              }
+            );
+            const data = await response.json();
+
+            if (data.address) {
+              setUserLocation({ lat, lng, address: data.address });
+              setAddressInput(data.address);
+            }
+          } catch (error) {
+            console.error("주소 변환 실패:", error);
+          }
+
+          try {
+            const radiusKm = Number(distance) || 5;
+            const hospitalResponse = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ lat, lng, radiusKm, numOfRows: 300 }),
+              }
+            );
+            const hospitalData = await hospitalResponse.json();
+
+            if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
+              const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
+              const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
+
+              // Extract department from hospital name
+              const extractDepartment = (name: string): string => {
+                if (name.includes("내과")) return "내과";
+                if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
+                if (name.includes("정형외과")) return "정형외과";
+                if (name.includes("피부과")) return "피부과";
+                if (name.includes("이비인후과")) return "이비인후과";
+                if (name.includes("안과")) return "안과";
+                if (name.includes("산부인과")) return "산부인과";
+                if (name.includes("치과")) return "치과";
+                if (name.includes("한의원")) return "한의원";
+                if (name.includes("정신건강의학과") || name.includes("정신과")) return "정신건강의학과";
+                if (name.includes("비뇨기과")) return "비뇨기과";
+                if (name.includes("외과")) return "외과";
+                if (name.includes("신경과")) return "신경과";
+                if (name.includes("재활의학과")) return "재활의학과";
+                return "일반";
+              };
+
+              const normalized = hospitalData.hospitals
+                .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
+                .map((hospital: any) => {
+                  const latNum = parseFloat(hospital.wgs84Lat) || lat;
+                  const lonNum = parseFloat(hospital.wgs84Lon) || lng;
+                  const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
+                  const hospitalName = hospital.dutyName || '이름 없음';
+                  return {
+                    id: hospital.hpid || Math.random().toString(),
+                    name: hospitalName,
+                    phone: hospital.dutyTel1 || '연락처 없음',
+                    address: hospital.dutyAddr || '주소 없음',
+                    lat: latNum,
+                    lng: lonNum,
+                    department: extractDepartment(hospitalName),
+                    isOpen: true,
+                    closingTime: "18:00",
+                    hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
+                    hasNaverBooking: false,
+                    calculatedDistance,
+                  };
+                })
+                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+                .slice(0, 30)
+                .map((hospital: any) => ({
+                  ...hospital,
+                  distance: `${hospital.calculatedDistance.toFixed(1)}km`,
+                }));
+
+              setHospitals(normalized);
+              toast.success("현재 위치를 기준으로 병원을 찾았습니다");
+            }
+          } catch (error) {
+            console.error("병원 정보 조회 실패:", error);
+            toast.error("병원 정보를 가져올 수 없습니다");
+          } finally {
+            setLoading(false);
+          }
+        },
+        (error) => {
+          console.error("위치 정보를 가져올 수 없습니다:", error);
+          toast.error("위치 정보를 가져올 수 없습니다");
+          setLoading(false);
+        }
+      );
+    }
+  };
+
   // Mock data with coordinates (fallback if API fails)
   const clinicsData = [
     {
@@ -327,19 +561,37 @@ const Clinic = () => {
       <div className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 space-y-4">
           {/* Location */}
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="위치를 가져오는 중..."
-                className="pl-10"
-                value={userLocation?.address || "위치를 가져오는 중..."}
-                readOnly
-              />
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="도로명 주소를 입력하세요 (예: 서울 강남구 테헤란로 123)"
+                  className="pl-10"
+                  value={addressInput}
+                  onChange={(e) => setAddressInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      searchByAddress();
+                    }
+                  }}
+                />
+              </div>
+              <Button 
+                onClick={searchByAddress}
+                disabled={searchLoading}
+              >
+                검색
+              </Button>
             </div>
-            <Button variant="secondary">
+            <Button 
+              variant="secondary" 
+              className="w-full"
+              onClick={getCurrentLocation}
+              disabled={loading}
+            >
               <MapPin className="h-4 w-4 mr-2" />
-              현재 위치
+              현재 위치로 재설정
             </Button>
           </div>
 
