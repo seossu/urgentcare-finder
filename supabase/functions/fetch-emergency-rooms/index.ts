@@ -18,65 +18,54 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Function to fetch phone number from Kakao Local API (robust: keyword → nearby fallback)
-async function fetchPhoneFromKakao(
+// Function to fetch phone number using Lovable AI
+async function fetchPhoneWithAI(
   hospitalName: string,
-  address?: string,
-  lat?: number,
-  lng?: number
+  address: string
 ): Promise<string> {
   try {
-    const kakaoApiKey = Deno.env.get('KAKAO_REST_API_KEY');
-    if (!kakaoApiKey) {
-      console.warn('KAKAO_REST_API_KEY not found');
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+    if (!lovableApiKey) {
+      console.warn('LOVABLE_API_KEY not found');
       return '';
     }
 
-    const headers = { 'Authorization': `KakaoAK ${kakaoApiKey}` };
+    const prompt = `병원 이름: ${hospitalName}\n주소: ${address}\n\n이 병원의 대표 전화번호를 찾아서 숫자만 반환해주세요. 전화번호를 찾을 수 없으면 빈 문자열을 반환하세요.`;
 
-    // 1) Keyword search (prefer exact/contains match)
-    const regionHint = address ? address.split(' ').slice(0, 2).join(' ') : '';
-    const keyword = `${hospitalName} ${regionHint}`.trim();
-    const kwUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(keyword)}&size=5`;
-    const kwRes = await fetch(kwUrl, { headers });
-    if (kwRes.ok) {
-      const data = await kwRes.json();
-      if (data.documents && data.documents.length > 0) {
-        // Try to find the best match by name containment (ignoring spaces)
-        const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase();
-        const target = norm(hospitalName);
-        const candidate = data.documents.find((d: any) => norm(d.place_name).includes(target)) || data.documents[0];
-        const phone = candidate?.phone || '';
-        if (phone) {
-          console.info(`Kakao keyword phone for ${hospitalName}: ${phone}`);
-          return phone;
-        }
-      }
-    } else {
-      console.warn(`Kakao keyword search failed for ${hospitalName}: ${kwRes.status}`);
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${lovableApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { 
+            role: 'system', 
+            content: '당신은 병원 전화번호를 찾는 도우미입니다. 정확한 전화번호만 반환하고, 찾을 수 없으면 빈 문자열을 반환하세요.' 
+          },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 100,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`AI phone lookup failed for ${hospitalName}: ${response.status}`);
+      return '';
     }
 
-    // 2) Nearby category search fallback (HP8: 병원)
-    if (typeof lat === 'number' && typeof lng === 'number') {
-      const catUrl = `https://dapi.kakao.com/v2/local/category/search.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=500&size=5`;
-      const catRes = await fetch(catUrl, { headers });
-      if (catRes.ok) {
-        const data = await catRes.json();
-        if (data.documents && data.documents.length > 0) {
-          const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase();
-          const target = norm(hospitalName);
-          const candidate = data.documents.find((d: any) => norm(d.place_name).includes(target)) || data.documents[0];
-          const phone = candidate?.phone || '';
-          if (phone) {
-            console.info(`Kakao nearby phone for ${hospitalName}: ${phone}`);
-            return phone;
-          }
-        }
-      } else {
-        console.warn(`Kakao category search failed for ${hospitalName}: ${catRes.status}`);
-      }
+    const data = await response.json();
+    const phoneNumber = data.choices?.[0]?.message?.content?.trim() || '';
+    
+    // Validate phone number format (Korean phone numbers)
+    const phoneRegex = /^\d{2,4}-?\d{3,4}-?\d{4}$/;
+    if (phoneNumber && phoneRegex.test(phoneNumber)) {
+      console.info(`AI found phone for ${hospitalName}: ${phoneNumber}`);
+      return phoneNumber;
     }
-
+    
     return '';
   } catch (error) {
     console.error(`Error fetching phone for ${hospitalName}:`, error);
@@ -184,12 +173,10 @@ serve(async (req) => {
                 );
               }
               
-              // Fetch phone number from Kakao (with address and coords)
-              const phoneNumber = await fetchPhoneFromKakao(
+              // Fetch phone number using AI
+              const phoneNumber = await fetchPhoneWithAI(
                 hospital.emergencyRoomName,
-                hospital.address,
-                hospital.latitude,
-                hospital.longitude
+                hospital.address
               );
               
               return {
