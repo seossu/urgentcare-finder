@@ -35,7 +35,7 @@ serve(async (req) => {
       WGS84_LON: lng.toString(),
       WGS84_LAT: lat.toString(),
       pageNo: '1',
-      numOfRows: '100', // Increased to get more results
+      numOfRows: '1000', // Get maximum results
     });
 
     console.log('Fetching emergency rooms from:', `${baseUrl}?${params.toString()}`);

@@ -76,15 +76,15 @@ const Clinic = () => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ lat, lng, radius: parseInt(distance) }),
+                body: JSON.stringify({ lat, lng }),
               }
             );
             const hospitalData = await hospitalResponse.json();
             
             if (hospitalData.emergencyRooms && hospitalData.emergencyRooms.length > 0) {
-              // Filter out pharmacies and process hospitals
+              // Filter out pharmacies and emergency rooms, keep only general hospitals
               const hospitalsWithDistance = hospitalData.emergencyRooms
-                .filter((item: any) => item.dutyEryn !== 2) // Exclude pharmacies
+                .filter((item: any) => item.dutyEryn !== 2 && item.dutyEryn !== 1) // Exclude pharmacies and emergency rooms
                 .map((hospital: any) => ({
                   id: hospital.hpid || Math.random().toString(),
                   name: hospital.dutyName || '이름 없음',
@@ -105,6 +105,7 @@ const Clinic = () => {
                   ),
                 }))
                 .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+                .slice(0, 30) // Get only nearest 30
                 .map((hospital: any) => ({
                   ...hospital,
                   distance: `${hospital.calculatedDistance.toFixed(1)}km`,

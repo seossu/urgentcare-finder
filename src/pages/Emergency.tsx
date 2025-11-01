@@ -65,7 +65,7 @@ const Emergency = () => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ lat, lng, radius: 20 }),
+                body: JSON.stringify({ lat, lng }),
               }
             );
             const emergencyData = await emergencyResponse.json();
@@ -92,6 +92,7 @@ const Emergency = () => {
                   ),
                 }))
                 .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+                .slice(0, 30) // Get only nearest 30
                 .map((room: any) => ({
                   ...room,
                   distance: `${room.calculatedDistance.toFixed(1)}km`,
