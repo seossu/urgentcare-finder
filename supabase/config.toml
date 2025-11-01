@@ -1,5 +1,8 @@
 project_id = "isieibfnexlimfujpqma"
 
+[functions.kakao-geocode]
+verify_jwt = false
+
 [functions.kakao-reverse-geocode]
 verify_jwt = false
 
