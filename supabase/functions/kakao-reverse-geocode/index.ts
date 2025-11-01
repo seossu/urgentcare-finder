@@ -28,7 +28,6 @@ serve(async (req) => {
       );
     }
 
-    // Call Kakao Local API for reverse geocoding
     const response = await fetch(
       `https://dapi.kakao.com/v2/local/geo/coord2address.json?x=${lng}&y=${lat}`,
       {
@@ -49,20 +48,28 @@ serve(async (req) => {
 
     const data = await response.json();
     
-    // Extract road address (도로명 주소) if available, otherwise use regular address
-    let address = '';
     if (data.documents && data.documents.length > 0) {
-      const doc = data.documents[0];
-      if (doc.road_address) {
-        address = doc.road_address.address_name;
-      } else if (doc.address) {
-        address = doc.address.address_name;
-      }
+      const address = data.documents[0].address;
+      const roadAddress = data.documents[0].road_address;
+      
+      // Extract administrative regions for emergency room API
+      const region1 = address.region_1depth_name; // 시/도 (e.g., "서울특별시")
+      const region2 = address.region_2depth_name; // 시/군/구 (e.g., "마포구")
+      
+      return new Response(
+        JSON.stringify({
+          address: roadAddress ? roadAddress.address_name : address.address_name,
+          region1,
+          region2,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
-
+    
+    // No address found
     return new Response(
-      JSON.stringify({ address }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: 'No address found for coordinates' }),
+      { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {

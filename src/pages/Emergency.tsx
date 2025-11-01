@@ -36,6 +36,9 @@ const Emergency = () => {
           setUserLocation({ lat, lng });
 
           // Convert coordinates to address using Kakao API via Edge Function
+          let region1 = '';
+          let region2 = '';
+          
           try {
             const response = await fetch(
               `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-reverse-geocode`,
@@ -51,6 +54,9 @@ const Emergency = () => {
             
             if (data.address) {
               setUserLocation({ lat, lng, address: data.address });
+              region1 = data.region1 || '';
+              region2 = data.region2 || '';
+              console.log("지역 정보:", region1, region2);
             }
           } catch (error) {
             console.error("주소 변환 실패:", error);
@@ -65,7 +71,13 @@ const Emergency = () => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ lat, lng, radius: 10000 }), // 10km radius in meters
+                body: JSON.stringify({ 
+                  lat, 
+                  lng, 
+                  radius: 10000, // 10km radius in meters
+                  region1, // 시/도
+                  region2, // 시/군/구
+                }),
               }
             );
             const emergencyData = await emergencyResponse.json();
@@ -84,9 +96,9 @@ const Emergency = () => {
                   const lonNum = parseFloat(room.wgs84Lon) || lng;
                   const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
                   
-                  // Parse bed information from real-time data
-                  const totalBeds = parseInt(room.hvec) || 0; // 응급실 총 병상 수
-                  const availableBeds = parseInt(room.hv1) || 0; // 응급실 가용 병상 수
+                  // Parse bed information from real-time data (enriched from API)
+                  const totalBeds = parseInt(room.totalBeds) || parseInt(room.hvec) || 0;
+                  const availableBeds = parseInt(room.availableBeds) || 0;
                   
                   // Parse available doctors/departments
                   const doctors = [];

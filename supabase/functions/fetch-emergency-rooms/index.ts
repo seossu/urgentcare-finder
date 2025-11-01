@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { lat, lng, radius = 10000 } = await req.json();
+    const { lat, lng, radius = 10000, region1, region2 } = await req.json();
 
     if (!lat || !lng) {
       return new Response(
@@ -31,40 +31,63 @@ serve(async (req) => {
     }
 
     // First get the list of emergency rooms with real-time bed info
-    // This endpoint provides: hvec (응급실 병상 수), hvoc (수술실 병상 수), hv1-hv40 (various bed availability)
-    const realtimeEndpoint = `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire?STAGE1=전체&pageNo=1&numOfRows=300`;
-    
+    // This endpoint provides: hvec (응급실 병상 수), hvoc (수술실 병상 수), hv1 (응급실 가용병상), etc.
+    // IMPORTANT: STAGE1 and STAGE2 are REQUIRED parameters (cannot use "전체")
     let realtimeBedData = new Map();
     
-    try {
-      const realtimeUrl = `${realtimeEndpoint}&serviceKey=${encodeURIComponent(publicDataApiKey)}`;
-      console.info(`Fetching real-time bed info from: ${realtimeUrl.substring(0, 120)}...`);
+    if (region1 && region2) {
+      const realtimeEndpoint = `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire?STAGE1=${encodeURIComponent(region1)}&STAGE2=${encodeURIComponent(region2)}&pageNo=1&numOfRows=100`;
       
-      const realtimeResponse = await fetch(realtimeUrl, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
-      
-      if (realtimeResponse.ok) {
-        const realtimeText = await realtimeResponse.text();
-        const realtimeData = JSON.parse(realtimeText);
-        const realtimeItems = realtimeData.response?.body?.items?.item || [];
+      try {
+        const realtimeUrl = `${realtimeEndpoint}&serviceKey=${encodeURIComponent(publicDataApiKey)}`;
+        console.info(`Fetching real-time bed info for ${region1} ${region2}`);
+        console.info(`URL: ${realtimeUrl.substring(0, 150)}...`);
         
-        console.info(`Real-time bed info: Found ${realtimeItems.length} items`);
-        if (realtimeItems.length > 0) {
-          console.info(`Sample real-time item: ${JSON.stringify(realtimeItems[0])}`);
-          // Map hpid to bed info
-          realtimeItems.forEach((item: any) => {
-            realtimeBedData.set(item.hpid, {
-              hvec: parseInt(item.hvec) || 0,  // 응급실 병상 수
-              hv1: parseInt(item.hv1) || 0,     // 응급실 가용 병상 수
-              hvoc: parseInt(item.hvoc) || 0,   // 수술실
+        const realtimeResponse = await fetch(realtimeUrl, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        });
+        
+        if (realtimeResponse.ok) {
+          const realtimeText = await realtimeResponse.text();
+          console.info(`Real-time API response (first 300 chars): ${realtimeText.substring(0, 300)}`);
+          
+          const realtimeData = JSON.parse(realtimeText);
+          const realtimeItems = realtimeData.response?.body?.items?.item || [];
+          
+          console.info(`Real-time bed info: Found ${realtimeItems.length} items`);
+          if (realtimeItems.length > 0) {
+            console.info(`Sample real-time item keys: ${Object.keys(realtimeItems[0]).join(', ')}`);
+            // Map hpid to bed info
+            realtimeItems.forEach((item: any) => {
+              // Parse hvec as total beds, and hv1 might be available beds or contact
+              // Based on API docs: hvec=응급실(총), hv1=응급실 당직의 직통연락처
+              // But in practice, some APIs may use different field mappings
+              const totalBeds = parseInt(item.hvec) || 0;
+              const availableInfo = item.hv1; // This could be phone or available beds
+              
+              // Try to parse hv1 as number (available beds), if it fails it's probably a phone number
+              let availableBeds = 0;
+              if (availableInfo && !isNaN(parseInt(availableInfo))) {
+                availableBeds = parseInt(availableInfo);
+              }
+              
+              realtimeBedData.set(item.hpid, {
+                totalBeds,
+                availableBeds,
+                hvoc: parseInt(item.hvoc) || 0,   // 수술실
+              });
             });
-          });
+          }
+        } else {
+          const errorText = await realtimeResponse.text();
+          console.warn(`Real-time API error ${realtimeResponse.status}: ${errorText.substring(0, 200)}`);
         }
+      } catch (err) {
+        console.error("Failed to fetch real-time bed info:", err);
       }
-    } catch (err) {
-      console.warn("Failed to fetch real-time bed info:", err);
+    } else {
+      console.warn("No region1/region2 provided, skipping real-time bed info");
     }
 
     // Then get the list of emergency rooms with location
@@ -112,6 +135,7 @@ serve(async (req) => {
             const enrichedItems = items.map((item: any) => {
               const bedInfo = realtimeBedData.get(item.hpid);
               if (bedInfo) {
+                console.info(`Enriched ${item.dutyName} with bed info: ${JSON.stringify(bedInfo)}`);
                 return { ...item, ...bedInfo };
               }
               return item;
