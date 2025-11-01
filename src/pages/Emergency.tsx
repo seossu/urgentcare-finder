@@ -8,17 +8,36 @@ import { toast } from "sonner";
 
 const Emergency = () => {
   const navigate = useNavigate();
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
 
   useEffect(() => {
     // Get user's current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          
+          setUserLocation({ lat, lng });
+
+          // Convert coordinates to address using Nominatim API
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ko`,
+              {
+                headers: {
+                  'User-Agent': 'HealthCareApp/1.0'
+                }
+              }
+            );
+            const data = await response.json();
+            
+            if (data.display_name) {
+              setUserLocation({ lat, lng, address: data.display_name });
+            }
+          } catch (error) {
+            console.error("주소 변환 실패:", error);
+          }
         },
         (error) => {
           console.error("위치 정보를 가져올 수 없습니다:", error);
@@ -100,9 +119,10 @@ const Emergency = () => {
             <div className="flex-1 relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="지역을 입력하세요"
+                placeholder="위치를 가져오는 중..."
                 className="pl-10"
-                defaultValue="서울시 종로구"
+                value={userLocation?.address || "위치를 가져오는 중..."}
+                readOnly
               />
             </div>
             <Button variant="secondary">
