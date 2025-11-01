@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, MapPin, Loader2, Hospital, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,10 +10,74 @@ import { useNavigate } from "react-router-dom";
 export const EmergencySearch = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [stage1, setStage1] = useState<string>("서울특별시");
+  const [stage1, setStage1] = useState<string>("");
   const [stage2, setStage2] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [emergencyRooms, setEmergencyRooms] = useState<EmergencyRoom[]>([]);
+
+  // Get current location and set default region
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          
+          try {
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-reverse-geocode`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ lat, lng }),
+              }
+            );
+            const data = await response.json();
+            
+            if (data.region1) {
+              // Map short names to full names
+              const regionMap: Record<string, string> = {
+                "서울": "서울특별시",
+                "부산": "부산광역시",
+                "대구": "대구광역시",
+                "인천": "인천광역시",
+                "광주": "광주광역시",
+                "대전": "대전광역시",
+                "울산": "울산광역시",
+                "세종": "세종특별자치시",
+                "경기": "경기도",
+                "강원": "강원특별자치도",
+                "충북": "충청북도",
+                "충남": "충청남도",
+                "전북": "전북특별자치도",
+                "전남": "전라남도",
+                "경북": "경상북도",
+                "경남": "경상남도",
+                "제주": "제주특별자치도",
+              };
+              
+              const fullRegionName = regionMap[data.region1] || data.region1;
+              setStage1(fullRegionName);
+              if (data.region2) {
+                setStage2(data.region2);
+              }
+            }
+          } catch (error) {
+            console.error("현재 위치 조회 실패:", error);
+            setStage1("서울특별시");
+          }
+        },
+        (error) => {
+          console.error("위치 정보를 가져올 수 없습니다:", error);
+          setStage1("서울특별시");
+        }
+      );
+    } else {
+      setStage1("서울특별시");
+    }
+  }, []);
 
   const handleSearch = async () => {
     if (!stage1) {
@@ -96,15 +160,14 @@ export const EmergencySearch = () => {
 
       {/* Region Selection Section */}
       <div className="border-b bg-card">
-        <div className="container mx-auto px-4 py-6">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold mb-2">시/도</h2>
-            <p className="text-sm text-muted-foreground">지역을 선택하세요</p>
+        <div className="container mx-auto px-4 py-3">
+          <div className="mb-2">
+            <h2 className="text-base font-semibold">지역 선택</h2>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
             {/* Left: Province/City List */}
-            <div className="lg:col-span-1 space-y-2">
+            <div className="lg:col-span-1 space-y-1 max-h-64 overflow-y-auto">
               {Object.keys(REGIONS).map((region) => (
                 <button
                   key={region}
@@ -112,7 +175,7 @@ export const EmergencySearch = () => {
                     setStage1(region);
                     setStage2("");
                   }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
+                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
                     stage1 === region
                       ? "bg-primary text-primary-foreground font-medium"
                       : "bg-muted hover:bg-muted/80"
@@ -128,13 +191,13 @@ export const EmergencySearch = () => {
             <div className="lg:col-span-3">
               {stage1 ? (
                 <>
-                  <div className="mb-3">
-                    <h3 className="font-medium">{stage1}</h3>
+                  <div className="mb-2">
+                    <h3 className="text-sm font-medium">{stage1}</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1.5 max-h-64 overflow-y-auto">
                     <button
                       onClick={() => setStage2("")}
-                      className={`px-4 py-2 rounded-lg border transition-colors ${
+                      className={`px-2 py-1.5 rounded text-xs border transition-colors ${
                         stage2 === ""
                           ? "bg-destructive text-destructive-foreground border-destructive"
                           : "bg-background border-border hover:bg-muted"
@@ -146,7 +209,7 @@ export const EmergencySearch = () => {
                       <button
                         key={district}
                         onClick={() => setStage2(district)}
-                        className={`px-4 py-2 rounded-lg border transition-colors ${
+                        className={`px-2 py-1.5 rounded text-xs border transition-colors ${
                           stage2 === district
                             ? "bg-primary text-primary-foreground border-primary"
                             : "bg-background border-border hover:bg-muted"
@@ -158,7 +221,7 @@ export const EmergencySearch = () => {
                   </div>
                 </>
               ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
                   시/도를 선택해주세요
                 </div>
               )}
@@ -166,12 +229,12 @@ export const EmergencySearch = () => {
           </div>
 
           {/* Search Button */}
-          <div className="mt-6">
+          <div className="mt-3">
             <Button 
               onClick={handleSearch} 
               disabled={loading || !stage1} 
               className="w-full" 
-              size="lg"
+              size="default"
             >
               {loading ? (
                 <>
