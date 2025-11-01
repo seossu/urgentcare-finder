@@ -73,12 +73,12 @@ const Profile = () => {
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({
+        .upsert({
+          id: user.id,
           medical_conditions: medicalConditions,
           medications: medications,
           family_history: familyHistory,
-        })
-        .eq("id", user.id);
+        });
 
       if (error) {
         toast({
