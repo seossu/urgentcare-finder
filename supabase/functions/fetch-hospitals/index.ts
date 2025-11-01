@@ -28,23 +28,23 @@ serve(async (req) => {
       );
     }
 
-    // 의료기관 정보 조회 API (반경/좌표 기반) - v1 엔드포인트 사용
+    // 의료기관 정보 조회 API (반경/좌표 기반) - v1 엔드포인트 사용 + 파라미터 표준화
     const baseUrl = 'https://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1';
 
-    // serviceKey는 인코딩 상태에 따라 403이 발생할 수 있으므로 직접 쿼리스트링 구성
-    const query =
-      `ServiceKey=${PUBLIC_DATA_API_KEY}` +
-      `&xPos=${lng}` +
-      `&yPos=${lat}` +
-      `&radius=${Math.round(radiusKm * 1000)}` +
-      `&pageNo=1` +
-      `&numOfRows=${numOfRows}` +
-      `&_type=json`;
+    const radiusMeters = Math.min(Math.round(radiusKm * 1000), 5000); // API 최대 반경 제한 보호
+    const rows = Math.min(Number(numOfRows) || 100, 100); // 최대 100 제한
 
-    console.log('Fetching hospitals from (v1):', `${baseUrl}?...`);
+    const params = new URLSearchParams({
+      serviceKey: PUBLIC_DATA_API_KEY, // 소문자 키 사용 (v1 호환)
+      xPos: String(lng),
+      yPos: String(lat),
+      radius: String(radiusMeters),
+      pageNo: '1',
+      numOfRows: String(rows),
+      _type: 'json',
+    });
 
-
-    const response = await fetch(`${baseUrl}?${query}`, { headers: { 'Accept': 'application/json' } });
+    const response = await fetch(`${baseUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
 
     if (!response.ok) {
       const errorText = await response.text();
