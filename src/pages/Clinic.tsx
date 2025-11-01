@@ -14,6 +14,19 @@ import { Stethoscope, MapPin, Phone, Navigation, ArrowLeft, Clock, Calendar } fr
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+// Calculate distance between two coordinates using Haversine formula
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 const Clinic = () => {
   const navigate = useNavigate();
   const [distance, setDistance] = useState("3");
@@ -80,14 +93,15 @@ const Clinic = () => {
     window.open(naverBookingUrl, "_blank");
   };
 
-  // Mock data for demonstration
-  const clinics = [
+  // Mock data with coordinates
+  const clinicsData = [
     {
       id: 1,
       name: "서울내과의원",
-      distance: "0.3km",
       phone: "02-1234-5678",
       address: "서울특별시 종로구 종로 123",
+      lat: 37.5701,
+      lng: 126.9870,
       department: "내과",
       isOpen: true,
       closingTime: "18:00",
@@ -97,9 +111,10 @@ const Clinic = () => {
     {
       id: 2,
       name: "우리소아청소년과",
-      distance: "0.8km",
       phone: "02-2345-6789",
       address: "서울특별시 종로구 율곡로 456",
+      lat: 37.5829,
+      lng: 126.9900,
       department: "소아청소년과",
       isOpen: true,
       closingTime: "19:00",
@@ -109,9 +124,10 @@ const Clinic = () => {
     {
       id: 3,
       name: "튼튼정형외과",
-      distance: "1.2km",
       phone: "02-3456-7890",
       address: "서울특별시 종로구 삼일대로 789",
+      lat: 37.5730,
+      lng: 126.9850,
       department: "정형외과",
       isOpen: false,
       closingTime: null,
@@ -119,6 +135,25 @@ const Clinic = () => {
       hasNaverBooking: false,
     },
   ];
+
+  // Calculate distances and sort by nearest
+  const clinics = userLocation
+    ? clinicsData
+        .map((clinic) => ({
+          ...clinic,
+          calculatedDistance: calculateDistance(
+            userLocation.lat,
+            userLocation.lng,
+            clinic.lat,
+            clinic.lng
+          ),
+        }))
+        .sort((a, b) => a.calculatedDistance - b.calculatedDistance)
+        .map((clinic) => ({
+          ...clinic,
+          distance: `${clinic.calculatedDistance.toFixed(1)}km`,
+        }))
+    : clinicsData.map((clinic) => ({ ...clinic, distance: "계산 중..." }));
 
   const departments = [
     { value: "all", label: "전체" },

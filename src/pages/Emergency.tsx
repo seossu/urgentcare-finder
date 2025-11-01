@@ -6,6 +6,19 @@ import { Hospital, MapPin, Phone, Navigation, ArrowLeft, Bed, Users } from "luci
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+// Calculate distance between two coordinates using Haversine formula
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 const Emergency = () => {
   const navigate = useNavigate();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
@@ -63,14 +76,15 @@ const Emergency = () => {
     window.open(naverMapUrl, "_blank");
   };
 
-  // Mock data for demonstration
-  const emergencyRooms = [
+  // Mock data with coordinates
+  const emergencyRoomsData = [
     {
       id: 1,
       name: "서울대학교병원 응급의료센터",
-      distance: "1.2km",
       phone: "02-2072-2345",
       address: "서울특별시 종로구 대학로 101",
+      lat: 37.5799,
+      lng: 127.0017,
       totalBeds: 45,
       availableBeds: 12,
       doctors: ["외과", "내과", "신경외과"],
@@ -78,9 +92,10 @@ const Emergency = () => {
     {
       id: 2,
       name: "삼성서울병원 응급의료센터",
-      distance: "2.5km",
       phone: "02-3410-2345",
       address: "서울특별시 강남구 일원로 81",
+      lat: 37.4885,
+      lng: 127.0857,
       totalBeds: 60,
       availableBeds: 8,
       doctors: ["외과", "내과", "정형외과", "소아과"],
@@ -88,14 +103,34 @@ const Emergency = () => {
     {
       id: 3,
       name: "아산병원 응급의료센터",
-      distance: "3.8km",
       phone: "02-3010-3000",
       address: "서울특별시 송파구 올림픽로 43길 88",
+      lat: 37.5267,
+      lng: 127.1104,
       totalBeds: 55,
       availableBeds: 15,
       doctors: ["외과", "내과", "신경외과", "흉부외과"],
     },
   ];
+
+  // Calculate distances and sort by nearest
+  const emergencyRooms = userLocation
+    ? emergencyRoomsData
+        .map((room) => ({
+          ...room,
+          calculatedDistance: calculateDistance(
+            userLocation.lat,
+            userLocation.lng,
+            room.lat,
+            room.lng
+          ),
+        }))
+        .sort((a, b) => a.calculatedDistance - b.calculatedDistance)
+        .map((room) => ({
+          ...room,
+          distance: `${room.calculatedDistance.toFixed(1)}km`,
+        }))
+    : emergencyRoomsData.map((room) => ({ ...room, distance: "계산 중..." }));
 
   return (
     <div className="min-h-screen bg-background">
