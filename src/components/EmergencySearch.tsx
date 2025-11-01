@@ -230,15 +230,15 @@ export const EmergencySearch = () => {
             {/* District Select */}
             <div className="lg:col-span-3">
               <Select 
-                value={stage2} 
-                onValueChange={setStage2}
+                value={stage2 || "all"} 
+                onValueChange={(value) => setStage2(value === "all" ? "" : value)}
                 disabled={!stage1}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={stage1 ? "시/군/구 선택" : "시/도를 먼저 선택하세요"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">전체</SelectItem>
+                  <SelectItem value="all">전체</SelectItem>
                   {availableDistricts.map((district) => (
                     <SelectItem key={district} value={district}>
                       {district}
