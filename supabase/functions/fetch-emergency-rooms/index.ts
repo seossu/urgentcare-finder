@@ -67,7 +67,7 @@ serve(async (req) => {
       );
     }
 
-    const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=응급실&x=${lng}&y=${lat}&radius=${radius}&size=30&sort=distance`;
+    const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=응급실&category_group_code=HP8&x=${lng}&y=${lat}&radius=${radius}&size=30&sort=distance`;
     
     console.info(`Trying Kakao API: ${kakaoUrl}`);
     
@@ -85,21 +85,21 @@ serve(async (req) => {
 
     const kakaoData = await kakaoResponse.json();
     
-    // Filter out pharmacies and only keep hospitals/emergency rooms
+    // Filter to only include emergency rooms - stricter filtering
     const filteredDocuments = kakaoData.documents.filter((doc: any) => {
       const name = doc.place_name.toLowerCase();
       const category = doc.category_name.toLowerCase();
       
-      // Exclude pharmacies
+      // Must NOT be pharmacy
       if (category.includes('약국') || name.includes('약국')) {
         return false;
       }
       
-      // Include only hospitals and emergency-related places
-      return category.includes('병원') || 
-             name.includes('응급') || 
-             name.includes('병원') ||
-             category.includes('의료');
+      // Must be hospital AND (have emergency or be general hospital)
+      const isHospital = category.includes('병원') || category.includes('의료');
+      const hasEmergency = name.includes('응급') || name.includes('병원') || name.includes('센터');
+      
+      return isHospital && hasEmergency;
     });
     
     // Transform Kakao data to match expected format
