@@ -1,5 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// Calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -8,22 +21,22 @@ const corsHeaders = {
 // Region code mapping for NEMC API
 const REGION_CODE_MAP: { [key: string]: string } = {
   '서울': '11',
-  '부산': '21',
-  '대구': '22',
-  '인천': '23',
-  '광주': '24',
-  '대전': '25',
-  '울산': '26',
-  '세종': '29',
-  '경기': '31',
-  '강원': '32',
-  '충북': '33',
-  '충남': '34',
-  '전북': '35',
-  '전남': '36',
-  '경북': '37',
-  '경남': '38',
-  '제주': '39',
+  '부산': '12',
+  '대구': '13',
+  '인천': '14',
+  '광주': '15',
+  '대전': '16',
+  '울산': '17',
+  '세종': '18',
+  '경기': '21',
+  '강원': '22',
+  '충북': '23',
+  '충남': '24',
+  '전북': '25',
+  '전남': '26',
+  '경북': '27',
+  '경남': '28',
+  '제주': '29',
 };
 
 serve(async (req) => {
@@ -42,18 +55,14 @@ serve(async (req) => {
       );
     }
 
-    const publicDataApiKey = Deno.env.get("PUBLIC_DATA_API_KEY");
-    
-    if (!publicDataApiKey) {
+    // Fetch emergency rooms from NEMC API
+    if (!region1) {
       return new Response(
-        JSON.stringify({ error: "API 키가 설정되지 않았습니다." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "지역 정보(region1)가 필요합니다." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Fetch real-time bed info from NEMC API
-    let realtimeBedData = new Map();
-    
     if (region1) {
       const regionCode = REGION_CODE_MAP[region1];
       console.info(`Looking up region code for: ${region1}, found: ${regionCode}`);
@@ -86,148 +95,87 @@ serve(async (req) => {
               console.info(`Sample NEMC hospital: ${JSON.stringify(hospitals[0]).substring(0, 300)}`);
             }
             
-            // Map NEMC data by hospital code (emogCode) and name for flexible matching
-            hospitals.forEach((hospital: any) => {
-              const bedInfo = {
-                totalBeds: parseInt(hospital.generalEmergencyTotal || '0') + parseInt(hospital.childEmergencyTotal || '0'),
-                availableBeds: parseInt(hospital.generalEmergencyAvailable || '0') + parseInt(hospital.childEmergencyAvailable || '0'),
-                erAvailable: parseInt(hospital.generalEmergencyAvailable || '0') + parseInt(hospital.childEmergencyAvailable || '0'),
-                erStatus: hospital.emergencyInstitutionType || '',
-                lastUpdated: '',  // NEMC API doesn't provide this
+            // Transform NEMC data to match expected format
+            const transformedItems = hospitals.map((hospital: any) => {
+              // Calculate distance from user location
+              const distance = calculateDistance(
+                lat,
+                lng,
+                hospital.latitude,
+                hospital.longitude
+              );
+              
+              return {
+                hpid: hospital.emogCode,
+                dutyName: hospital.emergencyRoomName,
+                dutyAddr: hospital.address,
+                dutyTel1: hospital.hotlineTel || '',
+                dutyTel3: hospital.emergencyRoomTel || '',
+                wgs84Lat: hospital.latitude,
+                wgs84Lon: hospital.longitude,
+                distance: distance,
+                realtimeBeds: {
+                  totalBeds: parseInt(hospital.generalEmergencyTotal || '0') + parseInt(hospital.childEmergencyTotal || '0'),
+                  availableBeds: parseInt(hospital.generalEmergencyAvailable || '0') + parseInt(hospital.childEmergencyAvailable || '0'),
+                  erAvailable: parseInt(hospital.generalEmergencyAvailable || '0') + parseInt(hospital.childEmergencyAvailable || '0'),
+                  erStatus: hospital.emergencyInstitutionType || '',
+                  lastUpdated: '',
+                }
               };
-              
-              // Try to match by emogCode (which might be same as hpid)
-              if (hospital.emogCode) {
-                realtimeBedData.set(hospital.emogCode, bedInfo);
-              }
-              
-              // Also map by hospital name for fallback matching
-              if (hospital.emergencyRoomName) {
-                realtimeBedData.set(hospital.emergencyRoomName, bedInfo);
-              }
             });
             
-            console.info(`Total mapped: ${realtimeBedData.size} hospital bed data entries`);
-          } else {
-            const errorText = await nemcResponse.text();
-            console.error(`NEMC API error ${nemcResponse.status}: ${errorText}`);
-          }
-        } catch (err) {
-          console.error("Failed to fetch NEMC real-time bed info:", err);
-        }
-      } else {
-        console.warn(`No region code mapping for region: "${region1}"`);
-      }
-    } else {
-      console.warn("No region1 provided, skipping NEMC real-time bed info");
-    }
-
-    // Then get the list of emergency rooms with location
-    const endpoints = [
-      `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytListInfoInqire?WGS84_LON=${lng}&WGS84_LAT=${lat}&pageNo=1&numOfRows=50`,
-      `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytBassInfoInqire?WGS84_LON=${lng}&WGS84_LAT=${lat}&pageNo=1&numOfRows=50`,
-    ];
-
-    for (const endpoint of endpoints) {
-      try {
-        const url = `${endpoint}&serviceKey=${encodeURIComponent(publicDataApiKey)}`;
-        console.info(`Trying endpoint: ${url.substring(0, 120)}...`);
-        
-        const response = await fetch(url, {
-          method: "GET",
-          headers: { 
-            Accept: "application/json",
-          },
-        });
-
-        console.info(`Response status: ${response.status}`);
-        
-        if (response.ok) {
-          const text = await response.text();
-          console.info(`Response text (first 200 chars): ${text.substring(0, 200)}`);
-          
-          let data;
-          try {
-            data = JSON.parse(text);
-          } catch (e) {
-            console.error("Failed to parse JSON:", e);
-            continue;
-          }
-
-          // Check various response structures
-          const items = data.response?.body?.items?.item || 
-                       data.response?.body?.items || 
-                       [];
-          
-          if (Array.isArray(items) && items.length > 0) {
-            console.info(`Success! Found ${items.length} items`);
-            console.info(`Sample item structure: ${JSON.stringify(items[0])}`);
+            // Sort by distance
+            transformedItems.sort((a: any, b: any) => a.distance - b.distance);
             
-            // Enrich items with real-time bed data from NEMC
-            const enrichedItems = items.map((item: any) => {
-              // Try to match by hpid first, then by hospital name
-              let bedInfo = realtimeBedData.get(item.hpid);
-              
-              if (!bedInfo && item.dutyName) {
-                // Try to find a partial name match
-                for (const [key, value] of realtimeBedData.entries()) {
-                  if (typeof key === 'string' && key.includes(item.dutyName.substring(0, 5))) {
-                    bedInfo = value;
-                    console.info(`Matched ${item.dutyName} by name to ${key}`);
-                    break;
-                  }
-                }
-              }
-              
-              if (bedInfo) {
-                console.info(`Enriched ${item.dutyName} with NEMC real-time bed info`);
-                return { 
-                  ...item, 
-                  realtimeBeds: bedInfo 
-                };
-              }
-              return item;
-            });
-            
-            // Return enriched data
-            const enrichedData = {
-              ...data,
-              response: {
-                ...data.response,
-                body: {
-                  ...data.response.body,
-                  items: {
-                    item: enrichedItems
-                  }
-                }
-              }
-            };
-            
+            console.info(`Transformed ${transformedItems.length} hospitals`);
+            // Return data in expected format
             return new Response(
-              JSON.stringify(enrichedData),
+              JSON.stringify({
+                response: {
+                  header: {
+                    resultCode: "00",
+                    resultMsg: "NORMAL SERVICE."
+                  },
+                  body: {
+                    items: {
+                      item: transformedItems
+                    },
+                    numOfRows: transformedItems.length,
+                    pageNo: 1,
+                    totalCount: transformedItems.length
+                  }
+                }
+              }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           } else {
-            console.warn(`No items found in response for endpoint: ${endpoint}`);
+            const errorText = await nemcResponse.text();
+            console.error(`NEMC API error ${nemcResponse.status}: ${errorText}`);
+            return new Response(
+              JSON.stringify({ error: "NEMC API 호출 실패" }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
-        } else {
-          const errorText = await response.text();
-          console.error(`Error ${response.status}: ${errorText.substring(0, 200)}`);
+        } catch (err) {
+          console.error("Failed to fetch NEMC data:", err);
+          return new Response(
+            JSON.stringify({ error: "NEMC API 호출 중 오류 발생" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
-      } catch (err) {
-        console.error(`Failed to fetch from ${endpoint}:`, err);
+      } else {
+        console.warn(`No region code mapping for region: "${region1}"`);
+        return new Response(
+          JSON.stringify({ error: "지원하지 않는 지역입니다." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
+    } else {
+      return new Response(
+        JSON.stringify({ error: "지역 정보가 필요합니다." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
-
-    // If all endpoints fail, return error
-    console.error("All Public Data API endpoints failed");
-    return new Response(
-      JSON.stringify({ 
-        error: "응급의료기관 API에서 데이터를 가져올 수 없습니다. API 키와 서비스 신청 상태를 확인해주세요.",
-        details: "모든 API endpoint에서 데이터를 가져오는데 실패했습니다."
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
