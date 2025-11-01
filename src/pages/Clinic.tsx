@@ -92,8 +92,8 @@ const Clinic = () => {
   const [searchLoading, setSearchLoading] = useState(false);
 
   useEffect(() => {
-    // Get user's current location
-    if (navigator.geolocation) {
+    // Get user's current location on initial load only
+    if (navigator.geolocation && !userLocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const lat = position.coords.latitude;
@@ -191,7 +191,79 @@ const Clinic = () => {
         }
       );
     }
-  }, [distance]);
+  }, []);
+
+  // Fetch hospitals when location or filters change
+  useEffect(() => {
+    if (userLocation) {
+      fetchHospitals(userLocation.lat, userLocation.lng);
+    }
+  }, [userLocation, distance, department]);
+
+  const fetchHospitals = async (lat: number, lng: number) => {
+    setLoading(true);
+    try {
+      const radiusKm = Number(distance) || 5;
+      const hospitalResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ lat, lng, radiusKm, numOfRows: 300 }),
+        }
+      );
+      const hospitalData = await hospitalResponse.json();
+
+      if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
+        const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
+        const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
+
+        const normalized = hospitalData.hospitals
+          .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
+          .map((hospital: any) => {
+            const latNum = parseFloat(hospital.wgs84Lat) || lat;
+            const lonNum = parseFloat(hospital.wgs84Lon) || lng;
+            const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
+            const hospitalName = hospital.dutyName || '이름 없음';
+            const startTime = hospital.dutyTime1s || "0900";
+            const endTime = hospital.dutyTime1c || "1800";
+            const status = checkHospitalStatus(startTime, endTime);
+            
+            return {
+              id: hospital.hpid || Math.random().toString(),
+              name: hospitalName,
+              phone: hospital.dutyTel1 || '연락처 없음',
+              address: hospital.dutyAddr || '주소 없음',
+              lat: latNum,
+              lng: lonNum,
+              department: extractDepartment(hospitalName),
+              isOpen: status.isOpen,
+              closingTime: status.closingTime,
+              hours: `평일 ${startTime}~${endTime}`,
+              hasNaverBooking: false,
+              calculatedDistance,
+            };
+          })
+          .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
+          .slice(0, 100) // Get more hospitals for filtering
+          .map((hospital: any) => ({
+            ...hospital,
+            distance: `${hospital.calculatedDistance.toFixed(1)}km`,
+          }));
+        
+        setHospitals(normalized);
+      } else {
+        setHospitals([]);
+      }
+    } catch (error) {
+      console.error("병원 정보 조회 실패:", error);
+      toast.error("병원 정보를 가져올 수 없습니다");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleNavigation = (clinicName: string, clinicAddress: string) => {
     if (!userLocation) {
@@ -241,74 +313,8 @@ const Clinic = () => {
       const data = await response.json();
 
       if (data.lat && data.lng) {
-        const lat = data.lat;
-        const lng = data.lng;
-        setUserLocation({ lat, lng, address: addressInput });
-
-        // Fetch hospitals from the new location
-        setLoading(true);
-        try {
-          const radiusKm = Number(distance) || 5;
-          const hospitalResponse = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ lat, lng, radiusKm, numOfRows: 300 }),
-            }
-          );
-          const hospitalData = await hospitalResponse.json();
-
-          if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
-            const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
-            const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
-
-            const normalized = hospitalData.hospitals
-              .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
-              .map((hospital: any) => {
-                const latNum = parseFloat(hospital.wgs84Lat) || lat;
-                const lonNum = parseFloat(hospital.wgs84Lon) || lng;
-                const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
-                const hospitalName = hospital.dutyName || '이름 없음';
-                const startTime = hospital.dutyTime1s || "0900";
-                const endTime = hospital.dutyTime1c || "1800";
-                const status = checkHospitalStatus(startTime, endTime);
-                
-                return {
-                  id: hospital.hpid || Math.random().toString(),
-                  name: hospitalName,
-                  phone: hospital.dutyTel1 || '연락처 없음',
-                  address: hospital.dutyAddr || '주소 없음',
-                  lat: latNum,
-                  lng: lonNum,
-                  department: extractDepartment(hospitalName),
-                  isOpen: status.isOpen,
-                  closingTime: status.closingTime,
-                  hours: `평일 ${startTime}~${endTime}`,
-                  hasNaverBooking: false,
-                  calculatedDistance,
-                };
-              })
-              .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
-              .slice(0, 30)
-              .map((hospital: any) => ({
-                ...hospital,
-                distance: `${hospital.calculatedDistance.toFixed(1)}km`,
-              }));
-
-            setHospitals(normalized);
-            toast.success("병원 정보를 불러왔습니다");
-          } else {
-            toast.error("주변에 병원이 없습니다");
-          }
-        } catch (error) {
-          console.error("병원 정보 조회 실패:", error);
-          toast.error("병원 정보를 가져올 수 없습니다");
-        } finally {
-          setLoading(false);
-        }
+        setUserLocation({ lat: data.lat, lng: data.lng, address: addressInput });
+        toast.success("병원 정보를 불러왔습니다");
       } else {
         toast.error("주소를 찾을 수 없습니다. 정확한 주소를 입력해주세요.");
       }
@@ -321,14 +327,11 @@ const Clinic = () => {
   };
 
   const getCurrentLocation = () => {
-    setLoading(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
-
-          setUserLocation({ lat, lng });
 
           try {
             const response = await fetch(
@@ -346,76 +349,18 @@ const Clinic = () => {
             if (data.address) {
               setUserLocation({ lat, lng, address: data.address });
               setAddressInput(data.address);
+            } else {
+              setUserLocation({ lat, lng });
             }
+            toast.success("현재 위치를 기준으로 병원을 찾았습니다");
           } catch (error) {
             console.error("주소 변환 실패:", error);
-          }
-
-          try {
-            const radiusKm = Number(distance) || 5;
-            const hospitalResponse = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ lat, lng, radiusKm, numOfRows: 300 }),
-              }
-            );
-            const hospitalData = await hospitalResponse.json();
-
-            if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
-              const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
-              const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
-
-              const normalized = hospitalData.hospitals
-                .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
-                .map((hospital: any) => {
-                  const latNum = parseFloat(hospital.wgs84Lat) || lat;
-                  const lonNum = parseFloat(hospital.wgs84Lon) || lng;
-                  const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
-                  const hospitalName = hospital.dutyName || '이름 없음';
-                  const startTime = hospital.dutyTime1s || "0900";
-                  const endTime = hospital.dutyTime1c || "1800";
-                  const status = checkHospitalStatus(startTime, endTime);
-                  
-                  return {
-                    id: hospital.hpid || Math.random().toString(),
-                    name: hospitalName,
-                    phone: hospital.dutyTel1 || '연락처 없음',
-                    address: hospital.dutyAddr || '주소 없음',
-                    lat: latNum,
-                    lng: lonNum,
-                    department: extractDepartment(hospitalName),
-                    isOpen: status.isOpen,
-                    closingTime: status.closingTime,
-                    hours: `평일 ${startTime}~${endTime}`,
-                    hasNaverBooking: false,
-                    calculatedDistance,
-                  };
-                })
-                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
-                .slice(0, 30)
-                .map((hospital: any) => ({
-                  ...hospital,
-                  distance: `${hospital.calculatedDistance.toFixed(1)}km`,
-                }));
-
-              setHospitals(normalized);
-              toast.success("현재 위치를 기준으로 병원을 찾았습니다");
-            }
-          } catch (error) {
-            console.error("병원 정보 조회 실패:", error);
-            toast.error("병원 정보를 가져올 수 없습니다");
-          } finally {
-            setLoading(false);
+            setUserLocation({ lat, lng });
           }
         },
         (error) => {
           console.error("위치 정보를 가져올 수 없습니다:", error);
           toast.error("위치 정보를 가져올 수 없습니다");
-          setLoading(false);
         }
       );
     }
@@ -528,6 +473,9 @@ const Clinic = () => {
       return a.isOpen ? -1 : 1;
     });
   }
+
+  // Limit to 30 results
+  clinics = clinics.slice(0, 30);
 
   const departments = [
     { value: "all", label: "전체" },
