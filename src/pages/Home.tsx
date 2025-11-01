@@ -35,18 +35,6 @@ const Home = () => {
           빠르게 길찾기까지 한번에
         </p>
 
-        {/* Location Card */}
-        <Card className="max-w-md mx-auto p-6 mb-12">
-          <div className="flex items-center gap-3 mb-4">
-            <MapPin className="h-5 w-5 text-secondary" />
-            <span className="text-sm text-muted-foreground">현재 위치</span>
-          </div>
-          <Button className="w-full" variant="secondary">
-            <MapPin className="h-4 w-4 mr-2" />
-            내 위치로 설정하기
-          </Button>
-        </Card>
-
         {/* Service Cards */}
         <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           <Card
