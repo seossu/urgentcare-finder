@@ -9,8 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const EmergencySearch = () => {
   const { toast } = useToast();
-  const [stage1, setStage1] = useState<string>("");
-  const [stage2, setStage2] = useState<string>("");
+  const [stage1, setStage1] = useState<string>("경기도");
+  const [stage2, setStage2] = useState<string>("고양시");
   const [loading, setLoading] = useState(false);
   const [emergencyRooms, setEmergencyRooms] = useState<EmergencyRoom[]>([]);
 
