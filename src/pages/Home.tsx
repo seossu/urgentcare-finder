@@ -38,10 +38,15 @@ const Home = () => {
             <h1 className="text-2xl font-bold">메디파인더</h1>
           </div>
           {user ? (
-            <Button variant="outline" onClick={() => navigate("/profile")}>
-              <User className="h-4 w-4 mr-2" />
-              마이페이지
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigate("/health")}>
+                나의 건강
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/profile")}>
+                <User className="h-4 w-4 mr-2" />
+                마이페이지
+              </Button>
+            </div>
           ) : (
             <Button variant="outline" onClick={() => navigate("/auth")}>
               <User className="h-4 w-4 mr-2" />

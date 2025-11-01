@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      health_info: {
+        Row: {
+          age: number | null
+          created_at: string
+          gender: string | null
+          height: number | null
+          id: string
+          menstrual_cycle: number | null
+          sleep_hours: number | null
+          updated_at: string
+          user_id: string
+          weight: number | null
+        }
+        Insert: {
+          age?: number | null
+          created_at?: string
+          gender?: string | null
+          height?: number | null
+          id?: string
+          menstrual_cycle?: number | null
+          sleep_hours?: number | null
+          updated_at?: string
+          user_id: string
+          weight?: number | null
+        }
+        Update: {
+          age?: number | null
+          created_at?: string
+          gender?: string | null
+          height?: number | null
+          id?: string
+          menstrual_cycle?: number | null
+          sleep_hours?: number | null
+          updated_at?: string
+          user_id?: string
+          weight?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
