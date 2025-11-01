@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { lat, lng, radius = 5 } = await req.json();
+    const { lat, lng, radiusKm = 5, numOfRows = 300 } = await req.json();
 
     if (!lat || !lng) {
       return new Response(
@@ -28,15 +28,15 @@ serve(async (req) => {
       );
     }
 
-    // 의료기관 정보 조회 API
+    // 의료기관 정보 조회 API (반경/좌표 기반)
     const baseUrl = 'http://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList';
     const params = new URLSearchParams({
       serviceKey: PUBLIC_DATA_API_KEY,
       xPos: lng.toString(),
       yPos: lat.toString(),
-      radius: (radius * 1000).toString(), // km to meters
+      radius: Math.round(radiusKm * 1000).toString(), // km -> m
       pageNo: '1',
-      numOfRows: '50',
+      numOfRows: String(numOfRows),
     });
 
     console.log('Fetching hospitals from:', `${baseUrl}?${params.toString()}`);
