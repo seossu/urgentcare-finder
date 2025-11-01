@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,12 +12,44 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Stethoscope, MapPin, Phone, Navigation, ArrowLeft, Clock, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const Clinic = () => {
   const navigate = useNavigate();
   const [distance, setDistance] = useState("3");
   const [department, setDepartment] = useState("all");
   const [sortBy, setSortBy] = useState("distance");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    // Get user's current location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error("위치 정보를 가져올 수 없습니다:", error);
+          toast.error("위치 정보를 가져올 수 없습니다");
+        }
+      );
+    }
+  }, []);
+
+  const handleNavigation = (clinicName: string, clinicAddress: string) => {
+    // Naver Map directions URL
+    const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(clinicName)}`;
+    window.open(naverMapUrl, "_blank");
+  };
+
+  const handleNaverBooking = (clinicName: string) => {
+    // Naver Booking URL
+    const naverBookingUrl = `https://booking.naver.com/booking/search?query=${encodeURIComponent(clinicName)}`;
+    window.open(naverBookingUrl, "_blank");
+  };
 
   // Mock data for demonstration
   const clinics = [
@@ -26,6 +58,7 @@ const Clinic = () => {
       name: "서울내과의원",
       distance: "0.3km",
       phone: "02-1234-5678",
+      address: "서울특별시 종로구 종로 123",
       department: "내과",
       isOpen: true,
       closingTime: "18:00",
@@ -37,6 +70,7 @@ const Clinic = () => {
       name: "우리소아청소년과",
       distance: "0.8km",
       phone: "02-2345-6789",
+      address: "서울특별시 종로구 율곡로 456",
       department: "소아청소년과",
       isOpen: true,
       closingTime: "19:00",
@@ -48,6 +82,7 @@ const Clinic = () => {
       name: "튼튼정형외과",
       distance: "1.2km",
       phone: "02-3456-7890",
+      address: "서울특별시 종로구 삼일대로 789",
       department: "정형외과",
       isOpen: false,
       closingTime: null,
@@ -194,12 +229,12 @@ const Clinic = () => {
                     전화하기
                   </a>
                 </Button>
-                <Button>
+                <Button onClick={() => handleNavigation(clinic.name, clinic.address)}>
                   <Navigation className="h-4 w-4 mr-2" />
                   길찾기
                 </Button>
                 {clinic.hasNaverBooking && (
-                  <Button variant="secondary">
+                  <Button variant="secondary" onClick={() => handleNaverBooking(clinic.name)}>
                     <Calendar className="h-4 w-4 mr-2" />
                     네이버 예약
                   </Button>

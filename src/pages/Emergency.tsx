@@ -1,11 +1,38 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Hospital, MapPin, Phone, Navigation, ArrowLeft, Bed, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const Emergency = () => {
   const navigate = useNavigate();
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    // Get user's current location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error("위치 정보를 가져올 수 없습니다:", error);
+          toast.error("위치 정보를 가져올 수 없습니다");
+        }
+      );
+    }
+  }, []);
+
+  const handleNavigation = (hospitalName: string, hospitalAddress: string) => {
+    // Naver Map directions URL
+    const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(hospitalName)}`;
+    window.open(naverMapUrl, "_blank");
+  };
 
   // Mock data for demonstration
   const emergencyRooms = [
@@ -14,6 +41,7 @@ const Emergency = () => {
       name: "서울대학교병원 응급의료센터",
       distance: "1.2km",
       phone: "02-2072-2345",
+      address: "서울특별시 종로구 대학로 101",
       totalBeds: 45,
       availableBeds: 12,
       doctors: ["외과", "내과", "신경외과"],
@@ -23,6 +51,7 @@ const Emergency = () => {
       name: "삼성서울병원 응급의료센터",
       distance: "2.5km",
       phone: "02-3410-2345",
+      address: "서울특별시 강남구 일원로 81",
       totalBeds: 60,
       availableBeds: 8,
       doctors: ["외과", "내과", "정형외과", "소아과"],
@@ -32,6 +61,7 @@ const Emergency = () => {
       name: "아산병원 응급의료센터",
       distance: "3.8km",
       phone: "02-3010-3000",
+      address: "서울특별시 송파구 올림픽로 43길 88",
       totalBeds: 55,
       availableBeds: 15,
       doctors: ["외과", "내과", "신경외과", "흉부외과"],
@@ -140,7 +170,7 @@ const Emergency = () => {
                     {room.phone}
                   </a>
                 </Button>
-                <Button>
+                <Button onClick={() => handleNavigation(room.name, room.address)}>
                   <Navigation className="h-4 w-4 mr-2" />
                   길찾기
                 </Button>
