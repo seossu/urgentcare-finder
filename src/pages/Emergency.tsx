@@ -169,15 +169,15 @@ const Emergency = () => {
   }, []);
 
   const handleNavigation = (hospitalName: string, hospitalAddress: string) => {
-    if (!userLocation) {
+    if (!userLocation || !userLocation.address) {
       toast.error("현재 위치를 가져오는 중입니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 
-    // Naver Map directions URL with current location as start point
-    const startPoint = `${userLocation.lng},${userLocation.lat},현재위치`;
-    const endPoint = `place:${encodeURIComponent(hospitalName)}`;
-    const naverMapUrl = `https://map.naver.com/v5/directions/${startPoint}/${endPoint}/-/transit`;
+    // Naver Map directions URL with road addresses
+    const startAddress = encodeURIComponent(userLocation.address);
+    const endAddress = encodeURIComponent(hospitalAddress);
+    const naverMapUrl = `https://map.naver.com/v5/directions/-/-/-/transit?c=15,0,0,0,dh&start=${startAddress}&destination=${endAddress}`;
     
     window.open(naverMapUrl, "_blank");
   };
