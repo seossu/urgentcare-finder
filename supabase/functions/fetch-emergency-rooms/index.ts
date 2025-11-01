@@ -55,7 +55,8 @@ serve(async (req) => {
     return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
   } catch (error) {
     // 401 오류 포함 모든 예외 처리
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
