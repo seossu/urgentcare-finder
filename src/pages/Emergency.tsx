@@ -24,6 +24,8 @@ const Emergency = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
   const [emergencyRooms, setEmergencyRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addressInput, setAddressInput] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const fetchEmergencyRooms = async (lat: number, lng: number) => {
     // Convert coordinates to address using Kakao API via Edge Function
@@ -48,6 +50,7 @@ const Emergency = () => {
         address = data.address;
         region1 = data.region1 || '';
         region2 = data.region2 || '';
+        setAddressInput(address);
       }
     } catch (error) {
       console.error("주소 변환 실패:", error);
@@ -124,6 +127,42 @@ const Emergency = () => {
     } catch (error) {
       console.error("응급실 정보 조회 실패:", error);
       toast.error("응급실 정보를 가져올 수 없습니다");
+    }
+  };
+
+  const searchByAddress = async () => {
+    if (!addressInput.trim()) {
+      toast.error("주소를 입력해주세요");
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kakao-geocode`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ address: addressInput }),
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.success && data.lat && data.lng) {
+        await fetchEmergencyRooms(data.lat, data.lng);
+        setLoading(false);
+        toast.success("해당 주소의 응급실을 찾았습니다");
+      } else {
+        toast.error("주소를 찾을 수 없습니다. 정확한 도로명 주소를 입력해주세요.");
+      }
+    } catch (error) {
+      console.error("주소 검색 실패:", error);
+      toast.error("주소 검색에 실패했습니다");
+    } finally {
+      setSearchLoading(false);
     }
   };
 
@@ -256,20 +295,45 @@ const Emergency = () => {
         </div>
       </header>
 
-      {/* Current Location Button */}
+      {/* Location Search */}
       <div className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-4 space-y-3">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="도로명 주소를 입력하세요 (예: 경기도 고양시 일산동구 일산로 100)"
+                className="pl-10"
+                value={addressInput}
+                onChange={(e) => setAddressInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    searchByAddress();
+                  }
+                }}
+              />
+            </div>
+            <Button 
+              variant="secondary" 
+              onClick={searchByAddress}
+              disabled={searchLoading}
+            >
+              {searchLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <MapPin className="h-4 w-4 mr-2" />
+              )}
+              검색
+            </Button>
+          </div>
           <Button 
-            variant="secondary" 
+            variant="outline" 
             onClick={getCurrentLocation}
             disabled={loading}
             className="w-full"
+            size="sm"
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Navigation className="h-4 w-4 mr-2" />
-            )}
+            <Navigation className="h-4 w-4 mr-2" />
             현재 위치로 재설정
           </Button>
         </div>
