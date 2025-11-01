@@ -24,25 +24,34 @@ export const EmergencyRoomCard = ({ room }: EmergencyRoomCardProps) => {
           </div>
         </div>
 
-        {(room.hvec !== undefined || room.hv1 !== undefined) && (
-          <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
-            {room.hvec !== undefined && (
+        {room.realtimeBeds && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Bed className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">총 병상</span>
+                  <span className="text-sm font-medium">응급실 총 병상</span>
                 </div>
-                <p className="text-2xl font-bold">{room.hvec}개</p>
+                <p className="text-2xl font-bold">{room.realtimeBeds.totalBeds}개</p>
               </div>
-            )}
-            {room.hv1 !== undefined && (
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Bed className="h-4 w-4 text-success" />
-                  <span className="text-sm font-medium">남은 병상</span>
+                  <span className="text-sm font-medium">가용 병상</span>
                 </div>
-                <p className="text-2xl font-bold text-success">{room.hv1}개</p>
+                <p className="text-2xl font-bold text-success">{room.realtimeBeds.erAvailable}개</p>
               </div>
+            </div>
+            {room.realtimeBeds.erStatus && (
+              <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
+                <span className="text-sm font-medium">응급실 상태</span>
+                <span className="text-sm font-bold">{room.realtimeBeds.erStatus}</span>
+              </div>
+            )}
+            {room.realtimeBeds.lastUpdated && (
+              <p className="text-xs text-muted-foreground text-right">
+                최종 업데이트: {room.realtimeBeds.lastUpdated}
+              </p>
             )}
           </div>
         )}

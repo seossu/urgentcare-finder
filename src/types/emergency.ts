@@ -10,6 +10,13 @@ export interface EmergencyRoom {
   hv1?: number;
   dutyEmcls?: string;
   dutyEmclsName?: string;
+  realtimeBeds?: {
+    totalBeds: number;
+    availableBeds: number;
+    erAvailable: number;
+    erStatus: string;
+    lastUpdated: string;
+  };
 }
 
 export interface ApiResponse {

@@ -5,6 +5,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Region code mapping for NEMC API
+const REGION_CODE_MAP: { [key: string]: string } = {
+  '서울': '11',
+  '부산': '21',
+  '대구': '22',
+  '인천': '23',
+  '광주': '24',
+  '대전': '25',
+  '울산': '26',
+  '세종': '29',
+  '경기': '31',
+  '강원': '32',
+  '충북': '33',
+  '충남': '34',
+  '전북': '35',
+  '전남': '36',
+  '경북': '37',
+  '경남': '38',
+  '제주': '39',
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -30,64 +51,54 @@ serve(async (req) => {
       );
     }
 
-    // First get the list of emergency rooms with real-time bed info
-    // This endpoint provides: hvec (응급실 병상 수), hvoc (수술실 병상 수), hv1 (응급실 가용병상), etc.
-    // IMPORTANT: STAGE1 and STAGE2 are REQUIRED parameters (cannot use "전체")
+    // Fetch real-time bed info from NEMC API
     let realtimeBedData = new Map();
     
-    if (region1 && region2) {
-      const realtimeEndpoint = `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire?STAGE1=${encodeURIComponent(region1)}&STAGE2=${encodeURIComponent(region2)}&pageNo=1&numOfRows=100`;
+    if (region1) {
+      const regionCode = REGION_CODE_MAP[region1];
       
-      try {
-        const realtimeUrl = `${realtimeEndpoint}&serviceKey=${encodeURIComponent(publicDataApiKey)}`;
-        console.info(`Fetching real-time bed info for ${region1} ${region2}`);
-        console.info(`URL: ${realtimeUrl.substring(0, 150)}...`);
-        
-        const realtimeResponse = await fetch(realtimeUrl, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-        });
-        
-        if (realtimeResponse.ok) {
-          const realtimeText = await realtimeResponse.text();
-          console.info(`Real-time API response (first 300 chars): ${realtimeText.substring(0, 300)}`);
+      if (regionCode) {
+        try {
+          const nemcUrl = `https://mediboard.nemc.or.kr/api/v1/search/handy?searchCondition=regional&emogloca=${regionCode}`;
+          console.info(`Fetching real-time bed info from NEMC for region ${region1} (code: ${regionCode})`);
           
-          const realtimeData = JSON.parse(realtimeText);
-          const realtimeItems = realtimeData.response?.body?.items?.item || [];
+          const nemcResponse = await fetch(nemcUrl, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+          });
           
-          console.info(`Real-time bed info: Found ${realtimeItems.length} items`);
-          if (realtimeItems.length > 0) {
-            console.info(`Sample real-time item keys: ${Object.keys(realtimeItems[0]).join(', ')}`);
-            // Map hpid to bed info
-            realtimeItems.forEach((item: any) => {
-              // Parse hvec as total beds, and hv1 might be available beds or contact
-              // Based on API docs: hvec=응급실(총), hv1=응급실 당직의 직통연락처
-              // But in practice, some APIs may use different field mappings
-              const totalBeds = parseInt(item.hvec) || 0;
-              const availableInfo = item.hv1; // This could be phone or available beds
-              
-              // Try to parse hv1 as number (available beds), if it fails it's probably a phone number
-              let availableBeds = 0;
-              if (availableInfo && !isNaN(parseInt(availableInfo))) {
-                availableBeds = parseInt(availableInfo);
+          if (nemcResponse.ok) {
+            const nemcData = await nemcResponse.json();
+            const hospitals = nemcData.hospitalList || [];
+            
+            console.info(`NEMC API: Found ${hospitals.length} hospitals with real-time bed info`);
+            
+            // Map NEMC data by hospital ID
+            hospitals.forEach((hospital: any) => {
+              // NEMC uses 'hpid' field for hospital ID
+              if (hospital.hpid) {
+                realtimeBedData.set(hospital.hpid, {
+                  totalBeds: parseInt(hospital.hvec) || 0,  // 응급실 병상수
+                  availableBeds: parseInt(hospital.hvoc) || 0,  // 수술실 병상수
+                  erAvailable: hospital.hvec ? parseInt(hospital.hvec) - (parseInt(hospital.hv1) || 0) : 0,  // 응급실 가용 병상
+                  erStatus: hospital.MKioskTy25 || '',  // 응급실 포화도
+                  lastUpdated: hospital.hvidate || '',  // 업데이트 시간
+                });
               }
-              
-              realtimeBedData.set(item.hpid, {
-                totalBeds,
-                availableBeds,
-                hvoc: parseInt(item.hvoc) || 0,   // 수술실
-              });
             });
+            
+            console.info(`Mapped ${realtimeBedData.size} hospitals with real-time bed data`);
+          } else {
+            console.warn(`NEMC API error ${nemcResponse.status}`);
           }
-        } else {
-          const errorText = await realtimeResponse.text();
-          console.warn(`Real-time API error ${realtimeResponse.status}: ${errorText.substring(0, 200)}`);
+        } catch (err) {
+          console.error("Failed to fetch NEMC real-time bed info:", err);
         }
-      } catch (err) {
-        console.error("Failed to fetch real-time bed info:", err);
+      } else {
+        console.warn(`No region code mapping for ${region1}`);
       }
     } else {
-      console.warn("No region1/region2 provided, skipping real-time bed info");
+      console.warn("No region1 provided, skipping NEMC real-time bed info");
     }
 
     // Then get the list of emergency rooms with location
@@ -131,12 +142,15 @@ serve(async (req) => {
             console.info(`Success! Found ${items.length} items`);
             console.info(`Sample item structure: ${JSON.stringify(items[0])}`);
             
-            // Enrich items with real-time bed data
+            // Enrich items with real-time bed data from NEMC
             const enrichedItems = items.map((item: any) => {
               const bedInfo = realtimeBedData.get(item.hpid);
               if (bedInfo) {
-                console.info(`Enriched ${item.dutyName} with bed info: ${JSON.stringify(bedInfo)}`);
-                return { ...item, ...bedInfo };
+                console.info(`Enriched ${item.dutyName} with NEMC real-time bed info`);
+                return { 
+                  ...item, 
+                  realtimeBeds: bedInfo 
+                };
               }
               return item;
             });
