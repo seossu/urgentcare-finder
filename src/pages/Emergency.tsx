@@ -56,40 +56,54 @@ const Emergency = () => {
             console.error("주소 변환 실패:", error);
           }
 
-          // Fetch nearby facilities using HIRA (반경/좌표 기반) → 응급실만 30개 추출
+          // Fetch emergency rooms using 전국 응급의료기관 API
           try {
             const emergencyResponse = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-emergency-rooms`,
               {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ lat, lng, radiusKm: 10, numOfRows: 300 }),
+                body: JSON.stringify({ lat, lng, radius: 10000 }), // 10km radius in meters
               }
             );
-            const hospitalData = await emergencyResponse.json();
+            const emergencyData = await emergencyResponse.json();
             
-            if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
-              const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
-              const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
-
-              const normalized = hospitalData.hospitals
-                .filter((room: any) => !isPharmacy(room) && isEmergency(room))
+            if (emergencyData.emergencyRooms && emergencyData.emergencyRooms.length > 0) {
+              const normalized = emergencyData.emergencyRooms
                 .map((room: any) => {
                   const latNum = parseFloat(room.wgs84Lat) || lat;
                   const lonNum = parseFloat(room.wgs84Lon) || lng;
                   const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
+                  
+                  // Parse bed information
+                  const totalBeds = parseInt(room.hvec) || 0; // 응급실 병상 수
+                  const availableBeds = parseInt(room.hvec) || 0; // API에서 가용병상 정보가 있다면 사용
+                  
+                  // Parse available doctors/departments
+                  const doctors = [];
+                  if (room.MKioskTy1 === 'Y') doctors.push('내과');
+                  if (room.MKioskTy2 === 'Y') doctors.push('외과');
+                  if (room.MKioskTy3 === 'Y') doctors.push('소아과');
+                  if (room.MKioskTy4 === 'Y') doctors.push('산부인과');
+                  if (room.MKioskTy5 === 'Y') doctors.push('안과');
+                  if (room.MKioskTy7 === 'Y') doctors.push('치과');
+                  if (room.MKioskTy8 === 'Y') doctors.push('한방');
+                  if (room.MKioskTy10 === 'Y') doctors.push('신경외과');
+                  if (room.MKioskTy11 === 'Y') doctors.push('흉부외과');
+                  if (doctors.length === 0) doctors.push('응급의학과');
+
                   return {
                     id: room.hpid || Math.random().toString(),
                     name: room.dutyName || '이름 없음',
-                    phone: room.dutyTel1 || '연락처 없음',
+                    phone: room.dutyTel3 || room.dutyTel1 || '연락처 없음', // 응급실 전화
                     address: room.dutyAddr || '주소 없음',
                     lat: latNum,
                     lng: lonNum,
-                    totalBeds: parseInt(room.hvec) || 0,
-                    availableBeds: parseInt(room.hvec) || 0,
-                    doctors: ["응급의학과"],
+                    totalBeds,
+                    availableBeds,
+                    doctors,
                     calculatedDistance,
                   };
                 })
