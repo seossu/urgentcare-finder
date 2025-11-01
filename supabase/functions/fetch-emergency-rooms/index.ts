@@ -85,12 +85,29 @@ serve(async (req) => {
 
     const kakaoData = await kakaoResponse.json();
     
+    // Filter out pharmacies and only keep hospitals/emergency rooms
+    const filteredDocuments = kakaoData.documents.filter((doc: any) => {
+      const name = doc.place_name.toLowerCase();
+      const category = doc.category_name.toLowerCase();
+      
+      // Exclude pharmacies
+      if (category.includes('약국') || name.includes('약국')) {
+        return false;
+      }
+      
+      // Include only hospitals and emergency-related places
+      return category.includes('병원') || 
+             name.includes('응급') || 
+             name.includes('병원') ||
+             category.includes('의료');
+    });
+    
     // Transform Kakao data to match expected format
     const transformedData = {
       response: {
         body: {
           items: {
-            item: kakaoData.documents.map((doc: any) => ({
+            item: filteredDocuments.map((doc: any) => ({
               dutyName: doc.place_name,
               dutyAddr: doc.address_name,
               dutyTel1: doc.phone || "정보 없음",
