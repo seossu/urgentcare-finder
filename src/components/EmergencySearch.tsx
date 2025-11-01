@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Search, MapPin, Loader2 } from "lucide-react";
+import { Search, MapPin, Loader2, Hospital, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmergencyRoomCard } from "./EmergencyRoomCard";
 import { useToast } from "@/hooks/use-toast";
 import { REGIONS, RegionKey, EmergencyRoom } from "@/types/emergency";
-import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 export const EmergencySearch = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [stage1, setStage1] = useState<string>("서울특별시");
   const [stage2, setStage2] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -77,19 +78,26 @@ export const EmergencySearch = () => {
   const availableDistricts = selectedRegion ? REGIONS[selectedRegion] : [];
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-8 p-6">
-      <div className="text-center space-y-4">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-destructive mb-4">
-          <MapPin className="w-8 h-8 text-primary-foreground" />
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <Hospital className="h-6 w-6 text-primary" />
+              <h1 className="text-xl font-bold">응급실 찾기</h1>
+            </div>
+          </div>
         </div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-destructive bg-clip-text text-transparent">
-          응급실 찾기
-        </h1>
-        <p className="text-muted-foreground text-lg">가까운 응급실을 빠르게 찾아보세요</p>
-      </div>
+      </header>
 
-      <div className="bg-card rounded-xl shadow-lg p-6 border">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Search Section */}
+      <div className="border-b bg-card">
+        <div className="container mx-auto px-4 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Select
             value={stage1}
             onValueChange={(value) => {
@@ -122,41 +130,40 @@ export const EmergencySearch = () => {
             </SelectContent>
           </Select>
 
-          <Button onClick={handleSearch} disabled={loading || !stage1 || !stage2} className="w-full" size="lg">
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                검색 중...
-              </>
-            ) : (
-              <>
-                <Search className="w-4 h-4 mr-2" />
-                검색
-              </>
-            )}
-          </Button>
+            <Button onClick={handleSearch} disabled={loading || !stage1 || !stage2} className="w-full" size="lg">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  검색 중...
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  검색
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {emergencyRooms.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <div className="w-1 h-8 bg-gradient-to-b from-primary to-destructive rounded-full" />
-            검색 결과 ({emergencyRooms.length}개)
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {emergencyRooms.map((room, index) => (
-              <div
-                key={room.hpid || index}
-                className="animate-in fade-in-50 slide-in-from-bottom-4"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <EmergencyRoomCard room={room} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Results */}
+      <div className="container mx-auto px-4 py-6">
+        {emergencyRooms.length > 0 && (
+          <>
+            <div className="mb-4">
+              <p className="text-sm text-muted-foreground">
+                총 <span className="font-semibold text-foreground">{emergencyRooms.length}개</span>의 응급실이 있습니다
+              </p>
+            </div>
+            <div className="space-y-4">
+              {emergencyRooms.map((room, index) => (
+                <EmergencyRoomCard key={room.hpid || index} room={room} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
