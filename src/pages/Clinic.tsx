@@ -93,20 +93,40 @@ const Clinic = () => {
               const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
               const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
 
+              // Extract department from hospital name
+              const extractDepartment = (name: string): string => {
+                if (name.includes("내과")) return "내과";
+                if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
+                if (name.includes("정형외과")) return "정형외과";
+                if (name.includes("피부과")) return "피부과";
+                if (name.includes("이비인후과")) return "이비인후과";
+                if (name.includes("안과")) return "안과";
+                if (name.includes("산부인과")) return "산부인과";
+                if (name.includes("치과")) return "치과";
+                if (name.includes("한의원")) return "한의원";
+                if (name.includes("정신건강의학과") || name.includes("정신과")) return "정신건강의학과";
+                if (name.includes("비뇨기과")) return "비뇨기과";
+                if (name.includes("외과")) return "외과";
+                if (name.includes("신경과")) return "신경과";
+                if (name.includes("재활의학과")) return "재활의학과";
+                return "일반";
+              };
+
               const normalized = hospitalData.hospitals
                 .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
                 .map((hospital: any) => {
                   const latNum = parseFloat(hospital.wgs84Lat) || lat;
                   const lonNum = parseFloat(hospital.wgs84Lon) || lng;
                   const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
+                  const hospitalName = hospital.dutyName || '이름 없음';
                   return {
                     id: hospital.hpid || Math.random().toString(),
-                    name: hospital.dutyName || '이름 없음',
+                    name: hospitalName,
                     phone: hospital.dutyTel1 || '연락처 없음',
                     address: hospital.dutyAddr || '주소 없음',
                     lat: latNum,
                     lng: lonNum,
-                    department: "일반",
+                    department: extractDepartment(hospitalName),
                     isOpen: true,
                     closingTime: "18:00",
                     hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
@@ -237,6 +257,10 @@ const Clinic = () => {
       orthopedics: ["정형외과"],
       dermatology: ["피부과"],
       ent: ["이비인후과"],
+      ophthalmology: ["안과"],
+      obgyn: ["산부인과"],
+      dental: ["치과"],
+      korean: ["한의원"],
     };
     const targetDepartments = departmentMap[department] || [];
     clinics = clinics.filter((clinic) =>
@@ -276,6 +300,10 @@ const Clinic = () => {
     { value: "orthopedics", label: "정형외과" },
     { value: "dermatology", label: "피부과" },
     { value: "ent", label: "이비인후과" },
+    { value: "ophthalmology", label: "안과" },
+    { value: "obgyn", label: "산부인과" },
+    { value: "dental", label: "치과" },
+    { value: "korean", label: "한의원" },
   ];
 
   return (
