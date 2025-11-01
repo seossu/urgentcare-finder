@@ -67,10 +67,10 @@ const Clinic = () => {
             console.error("주소 변환 실패:", error);
           }
 
-          // Fetch hospitals from Public Data API
+          // Fetch hospitals from Public Data API (using emergency API which includes all medical facilities)
           try {
             const hospitalResponse = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-hospitals`,
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-emergency-rooms`,
               {
                 method: 'POST',
                 headers: {
@@ -81,26 +81,27 @@ const Clinic = () => {
             );
             const hospitalData = await hospitalResponse.json();
             
-            if (hospitalData.hospitals && hospitalData.hospitals.length > 0) {
-              // Calculate distances and sort
-              const hospitalsWithDistance = hospitalData.hospitals
+            if (hospitalData.emergencyRooms && hospitalData.emergencyRooms.length > 0) {
+              // Filter out pharmacies and process hospitals
+              const hospitalsWithDistance = hospitalData.emergencyRooms
+                .filter((item: any) => item.dutyEryn !== 2) // Exclude pharmacies
                 .map((hospital: any) => ({
-                  id: hospital.ykiho || Math.random().toString(),
-                  name: hospital.yadmNm || '이름 없음',
-                  phone: hospital.telno || '연락처 없음',
-                  address: hospital.addr || '주소 없음',
-                  lat: parseFloat(hospital.YPos) || lat,
-                  lng: parseFloat(hospital.XPos) || lng,
-                  department: hospital.clCdNm || "일반",
+                  id: hospital.hpid || Math.random().toString(),
+                  name: hospital.dutyName || '이름 없음',
+                  phone: hospital.dutyTel1 || '연락처 없음',
+                  address: hospital.dutyAddr || '주소 없음',
+                  lat: parseFloat(hospital.wgs84Lat) || lat,
+                  lng: parseFloat(hospital.wgs84Lon) || lng,
+                  department: "일반",
                   isOpen: true,
                   closingTime: "18:00",
-                  hours: "평일 09:00~18:00",
+                  hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
                   hasNaverBooking: false,
                   calculatedDistance: calculateDistance(
                     lat,
                     lng,
-                    parseFloat(hospital.YPos) || lat,
-                    parseFloat(hospital.XPos) || lng
+                    parseFloat(hospital.wgs84Lat) || lat,
+                    parseFloat(hospital.wgs84Lon) || lng
                   ),
                 }))
                 .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
