@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import ReactMarkdown from "react-markdown";
 
 const Health = () => {
   const navigate = useNavigate();
@@ -311,8 +312,8 @@ const Health = () => {
                 <span className="text-primary font-bold">{bmi}</span>
               </div>
             )}
-            <div className="prose prose-sm max-w-none">
-              <p className="whitespace-pre-wrap text-foreground">{analysis}</p>
+            <div className="prose prose-sm max-w-none text-foreground">
+              <ReactMarkdown>{analysis}</ReactMarkdown>
             </div>
           </Card>
         )}
