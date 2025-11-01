@@ -76,6 +76,44 @@ serve(async (req) => {
     }
 
     if (!response) {
+      // Fallback to Kakao Local Search (Hospitals) when Public Data API fails
+      try {
+        const KAKAO_REST_API_KEY = Deno.env.get('KAKAO_REST_API_KEY');
+        if (KAKAO_REST_API_KEY) {
+          const kakaoRadius = Math.min(radiusMeters, 20000);
+          const kakaoUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=${kakaoRadius}&size=${Math.min(rows, 45)}`;
+          console.warn('HIRA upstream failed. Falling back to Kakao Local API:', { lastStatus, lastUrl, kakaoUrl });
+          const kakaoRes = await fetch(kakaoUrl, {
+            headers: { Authorization: `KakaoAK ${KAKAO_REST_API_KEY}` },
+          });
+          const kakaoText = await kakaoRes.text();
+          if (!kakaoRes.ok) {
+            console.error('Kakao API error:', kakaoRes.status, kakaoText.slice(0, 300));
+          } else {
+            const kakaoData = JSON.parse(kakaoText);
+            const docs = Array.isArray(kakaoData?.documents) ? kakaoData.documents : [];
+            const hospitals = docs.map((d: any) => ({
+              hpid: d.id,
+              dutyName: d.place_name,
+              dutyAddr: d.road_address_name || d.address_name,
+              dutyTel1: d.phone || '',
+              wgs84Lat: d.y,
+              wgs84Lon: d.x,
+              dutyEryn: 0, // Unknown from Kakao
+            }));
+            return new Response(
+              JSON.stringify({ hospitals }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        } else {
+          console.warn('KAKAO_REST_API_KEY not configured; cannot use fallback');
+        }
+      } catch (fbErr) {
+        console.error('Kakao fallback error:', fbErr);
+      }
+
+      // If fallback also fails, return original error
       return new Response(
         JSON.stringify({ error: 'Failed to fetch hospitals', status: lastStatus || 502, details: lastBody || 'Unknown upstream error' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -106,6 +144,42 @@ serve(async (req) => {
     const header = data?.response?.header;
     if (!header || header?.resultCode !== '00') {
       console.error('Public API header error:', header);
+
+      // Try Kakao fallback before returning error
+      try {
+        const KAKAO_REST_API_KEY = Deno.env.get('KAKAO_REST_API_KEY');
+        if (KAKAO_REST_API_KEY) {
+          const kakaoRadius = Math.min(radiusMeters, 20000);
+          const kakaoUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=${kakaoRadius}&size=${Math.min(rows, 45)}`;
+          console.warn('Header error from HIRA. Falling back to Kakao Local API:', { kakaoUrl });
+          const kakaoRes = await fetch(kakaoUrl, {
+            headers: { Authorization: `KakaoAK ${KAKAO_REST_API_KEY}` },
+          });
+          const kakaoText = await kakaoRes.text();
+          if (kakaoRes.ok) {
+            const kakaoData = JSON.parse(kakaoText);
+            const docs = Array.isArray(kakaoData?.documents) ? kakaoData.documents : [];
+            const hospitals = docs.map((d: any) => ({
+              hpid: d.id,
+              dutyName: d.place_name,
+              dutyAddr: d.road_address_name || d.address_name,
+              dutyTel1: d.phone || '',
+              wgs84Lat: d.y,
+              wgs84Lon: d.x,
+              dutyEryn: 0,
+            }));
+            return new Response(
+              JSON.stringify({ hospitals }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          } else {
+            console.error('Kakao API error (header fallback):', kakaoRes.status, kakaoText.slice(0, 300));
+          }
+        }
+      } catch (fbErr) {
+        console.error('Kakao fallback error (header):', fbErr);
+      }
+
       return new Response(
         JSON.stringify({ error: 'Upstream error', status: 502, resultCode: header?.resultCode, resultMsg: header?.resultMsg }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
