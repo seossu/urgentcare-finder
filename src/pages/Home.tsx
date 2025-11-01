@@ -104,56 +104,20 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="bg-muted py-16">
-        <div className="container mx-auto px-4">
-          <h3 className="text-3xl font-bold text-center mb-12">
-            메디파인더의 특징
-          </h3>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Hospital className="h-6 w-6 text-primary" />
-              </div>
-              <h4 className="font-bold mb-2">실시간 병상 정보</h4>
-              <p className="text-sm text-muted-foreground">
-                응급실의 실시간 병상 현황을 확인하세요
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center mx-auto mb-4">
-                <MapPin className="h-6 w-6 text-secondary" />
-              </div>
-              <h4 className="font-bold mb-2">거리 기반 검색</h4>
-              <p className="text-sm text-muted-foreground">
-                가까운 병원부터 빠르게 찾아보세요
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                <Stethoscope className="h-6 w-6 text-accent" />
-              </div>
-              <h4 className="font-bold mb-2">진료 중 병원 표시</h4>
-              <p className="text-sm text-muted-foreground">
-                현재 진료 중인 병원만 골라보세요
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Advertisement Banner */}
-      <section className="container mx-auto px-4 py-8">
-        <div className="max-w-5xl mx-auto">
-          <img 
-            src={adBanner} 
-            alt="광고 배너" 
-            className="w-full rounded-lg shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
-            onClick={() => {
-              // 광고 클릭 시 동작 (필요시 수정)
-              console.log("광고 클릭");
-            }}
-          />
+      <section className="container mx-auto px-4 py-12">
+        <div className="max-w-6xl mx-auto">
+          <div className="relative w-full" style={{ paddingBottom: "33.33%" }}>
+            <img 
+              src={adBanner} 
+              alt="광고 배너" 
+              className="absolute inset-0 w-full h-full object-cover rounded-lg shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
+              onClick={() => {
+                // 광고 클릭 시 동작 (필요시 수정)
+                console.log("광고 클릭");
+              }}
+            />
+          </div>
         </div>
       </section>
     </div>
