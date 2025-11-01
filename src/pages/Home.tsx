@@ -5,7 +5,7 @@ import { MapPin, Hospital, Stethoscope, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import adBanner from "@/assets/ad-banner.jpg";
+import adBanner from "@/assets/ad-banner.png";
 
 const Home = () => {
   const navigate = useNavigate();
