@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.fetch-hospitals]
 verify_jwt = false
+
+[functions.symptom-checker]
+verify_jwt = false

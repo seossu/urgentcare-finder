@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -10,9 +11,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Stethoscope, MapPin, Phone, Navigation, ArrowLeft, Clock, Calendar } from "lucide-react";
+import { Stethoscope, MapPin, Phone, Navigation, ArrowLeft, Clock, Calendar, Sparkles, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Calculate distance between two coordinates using Haversine formula
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -90,6 +92,11 @@ const Clinic = () => {
   const [loading, setLoading] = useState(true);
   const [addressInput, setAddressInput] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
+  
+  // AI symptom checker states
+  const [symptoms, setSymptoms] = useState("");
+  const [aiRecommendation, setAiRecommendation] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     // Get user's current location on initial load only
@@ -365,6 +372,62 @@ const Clinic = () => {
     }
   };
 
+  const analyzeSymptoms = async () => {
+    if (!symptoms.trim()) {
+      toast.error("증상을 입력해주세요");
+      return;
+    }
+
+    setAiLoading(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/symptom-checker`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ symptoms }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAiRecommendation(data);
+        toast.success("증상 분석이 완료되었습니다");
+        
+        // If AI recommends a specific department, filter hospitals by that department
+        if (data.department) {
+          const departmentMapping: { [key: string]: string } = {
+            "내과": "internal",
+            "소아청소년과": "pediatrics",
+            "정형외과": "orthopedics",
+            "피부과": "dermatology",
+            "이비인후과": "ent",
+            "안과": "ophthalmology",
+            "산부인과": "obgyn",
+            "치과": "dental",
+            "한의원": "korean",
+          };
+          
+          const mappedDepartment = departmentMapping[data.department];
+          if (mappedDepartment) {
+            setTempDepartment(mappedDepartment);
+            setDepartment(mappedDepartment);
+          }
+        }
+      } else {
+        toast.error(data.error || "증상 분석 중 오류가 발생했습니다");
+      }
+    } catch (error) {
+      console.error("증상 분석 실패:", error);
+      toast.error("증상 분석에 실패했습니다");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   // Mock data with coordinates (fallback if API fails)
   const clinicsData = [
     {
@@ -505,6 +568,67 @@ const Clinic = () => {
           </div>
         </div>
       </header>
+
+      {/* AI Symptom Checker */}
+      <div className="border-b bg-gradient-to-r from-primary/5 to-secondary/5">
+        <div className="container mx-auto px-4 py-6 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">AI 증상 분석</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            증상을 설명하시면 AI가 적절한 진료과를 추천해드립니다
+          </p>
+          
+          <div className="space-y-3">
+            <Textarea
+              placeholder="예: 머리가 아프고 열이 나요. 기침도 조금 나고 목이 아픕니다."
+              className="min-h-[100px] resize-none"
+              value={symptoms}
+              onChange={(e) => setSymptoms(e.target.value)}
+            />
+            <Button 
+              onClick={analyzeSymptoms}
+              disabled={aiLoading || !symptoms.trim()}
+              className="w-full"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              {aiLoading ? "분석 중..." : "증상 분석하기"}
+            </Button>
+          </div>
+
+          {aiRecommendation && (
+            <Alert className={
+              aiRecommendation.urgency === "high" 
+                ? "border-destructive bg-destructive/10" 
+                : "border-primary bg-primary/10"
+            }>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <div>
+                    <span className="font-semibold">추천 진료과: </span>
+                    <Badge variant="secondary" className="ml-2">
+                      {aiRecommendation.department}
+                    </Badge>
+                  </div>
+                  <p className="text-sm">{aiRecommendation.reason}</p>
+                  {aiRecommendation.additionalAdvice && (
+                    <p className="text-sm text-muted-foreground italic">
+                      {aiRecommendation.additionalAdvice}
+                    </p>
+                  )}
+                  {aiRecommendation.urgency === "high" && (
+                    <p className="text-sm font-semibold text-destructive">
+                      ⚠️ 응급 상황으로 판단됩니다. 즉시 응급실을 방문하거나 119에 연락하세요.
+                    </p>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      </div>
 
       {/* Location and Filters */}
       <div className="border-b bg-card">
