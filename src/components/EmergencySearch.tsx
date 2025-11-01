@@ -15,6 +15,8 @@ export const EmergencySearch = () => {
   const [loading, setLoading] = useState(false);
   const [emergencyRooms, setEmergencyRooms] = useState<EmergencyRoom[]>([]);
   const [currentAddress, setCurrentAddress] = useState<string>("");
+  const [currentLat, setCurrentLat] = useState<number>(0);
+  const [currentLng, setCurrentLng] = useState<number>(0);
 
   // Get current location and set default region
   useEffect(() => {
@@ -23,6 +25,8 @@ export const EmergencySearch = () => {
         async (position) => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
+          setCurrentLat(lat);
+          setCurrentLng(lng);
           
           try {
             const response = await fetch(
@@ -302,7 +306,13 @@ export const EmergencySearch = () => {
             </div>
             <div className="space-y-4">
               {emergencyRooms.map((room, index) => (
-                <EmergencyRoomCard key={room.hpid || index} room={room} currentAddress={currentAddress} />
+                <EmergencyRoomCard 
+                  key={room.hpid || index} 
+                  room={room} 
+                  currentAddress={currentAddress}
+                  currentLat={currentLat}
+                  currentLng={currentLng}
+                />
               ))}
             </div>
           </>

@@ -6,14 +6,25 @@ import { EmergencyRoom } from "@/types/emergency";
 interface EmergencyRoomCardProps {
   room: EmergencyRoom;
   currentAddress?: string;
+  currentLat?: number;
+  currentLng?: number;
 }
 
-export const EmergencyRoomCard = ({ room, currentAddress }: EmergencyRoomCardProps) => {
+export const EmergencyRoomCard = ({ room, currentAddress, currentLat, currentLng }: EmergencyRoomCardProps) => {
   const handleNavigation = () => {
-    const start = currentAddress || "내 위치";
-    const destination = room.dutyAddr || room.dutyName;
-    const naverMapUrl = `https://map.naver.com/v5/directions/${encodeURIComponent(start)}/${encodeURIComponent(destination)}`;
-    window.open(naverMapUrl, "_blank");
+    // Use coordinates for precise navigation
+    if (currentLat && currentLng && room.wgs84Lon && room.wgs84Lat) {
+      const startName = encodeURIComponent(currentAddress || "현재 위치");
+      const endName = encodeURIComponent(room.dutyName);
+      const naverMapUrl = `https://map.naver.com/v5/directions/${currentLng},${currentLat},${startName}/${room.wgs84Lon},${room.wgs84Lat},${endName}`;
+      window.open(naverMapUrl, "_blank");
+    } else {
+      // Fallback to address-based search
+      const start = currentAddress || "내 위치";
+      const destination = room.dutyAddr || room.dutyName;
+      const naverMapUrl = `https://map.naver.com/v5/directions/${encodeURIComponent(start)}/${encodeURIComponent(destination)}`;
+      window.open(naverMapUrl, "_blank");
+    }
   };
 
   return (
