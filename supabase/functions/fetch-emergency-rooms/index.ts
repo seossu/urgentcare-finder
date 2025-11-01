@@ -30,11 +30,47 @@ serve(async (req) => {
       );
     }
 
-    // Try different endpoints for 응급의료기관 API
+    // First get the list of emergency rooms with real-time bed info
+    // This endpoint provides: hvec (응급실 병상 수), hvoc (수술실 병상 수), hv1-hv40 (various bed availability)
+    const realtimeEndpoint = `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire?STAGE1=전체&pageNo=1&numOfRows=300`;
+    
+    let realtimeBedData = new Map();
+    
+    try {
+      const realtimeUrl = `${realtimeEndpoint}&serviceKey=${encodeURIComponent(publicDataApiKey)}`;
+      console.info(`Fetching real-time bed info from: ${realtimeUrl.substring(0, 120)}...`);
+      
+      const realtimeResponse = await fetch(realtimeUrl, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      
+      if (realtimeResponse.ok) {
+        const realtimeText = await realtimeResponse.text();
+        const realtimeData = JSON.parse(realtimeText);
+        const realtimeItems = realtimeData.response?.body?.items?.item || [];
+        
+        console.info(`Real-time bed info: Found ${realtimeItems.length} items`);
+        if (realtimeItems.length > 0) {
+          console.info(`Sample real-time item: ${JSON.stringify(realtimeItems[0])}`);
+          // Map hpid to bed info
+          realtimeItems.forEach((item: any) => {
+            realtimeBedData.set(item.hpid, {
+              hvec: parseInt(item.hvec) || 0,  // 응급실 병상 수
+              hv1: parseInt(item.hv1) || 0,     // 응급실 가용 병상 수
+              hvoc: parseInt(item.hvoc) || 0,   // 수술실
+            });
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch real-time bed info:", err);
+    }
+
+    // Then get the list of emergency rooms with location
     const endpoints = [
       `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytListInfoInqire?WGS84_LON=${lng}&WGS84_LAT=${lat}&pageNo=1&numOfRows=50`,
       `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytBassInfoInqire?WGS84_LON=${lng}&WGS84_LAT=${lat}&pageNo=1&numOfRows=50`,
-      `https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire?STAGE1=서울&pageNo=1&numOfRows=100`,
     ];
 
     for (const endpoint of endpoints) {
@@ -71,8 +107,32 @@ serve(async (req) => {
           if (Array.isArray(items) && items.length > 0) {
             console.info(`Success! Found ${items.length} items`);
             console.info(`Sample item structure: ${JSON.stringify(items[0])}`);
+            
+            // Enrich items with real-time bed data
+            const enrichedItems = items.map((item: any) => {
+              const bedInfo = realtimeBedData.get(item.hpid);
+              if (bedInfo) {
+                return { ...item, ...bedInfo };
+              }
+              return item;
+            });
+            
+            // Return enriched data
+            const enrichedData = {
+              ...data,
+              response: {
+                ...data.response,
+                body: {
+                  ...data.response.body,
+                  items: {
+                    item: enrichedItems
+                  }
+                }
+              }
+            };
+            
             return new Response(
-              JSON.stringify(data),
+              JSON.stringify(enrichedData),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           } else {

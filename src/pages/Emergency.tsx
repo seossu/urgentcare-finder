@@ -84,9 +84,9 @@ const Emergency = () => {
                   const lonNum = parseFloat(room.wgs84Lon) || lng;
                   const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
                   
-                  // Parse bed information
-                  const totalBeds = parseInt(room.hvec) || 0; // 응급실 병상 수
-                  const availableBeds = parseInt(room.hvec) || 0; // API에서 가용병상 정보가 있다면 사용
+                  // Parse bed information from real-time data
+                  const totalBeds = parseInt(room.hvec) || 0; // 응급실 총 병상 수
+                  const availableBeds = parseInt(room.hv1) || 0; // 응급실 가용 병상 수
                   
                   // Parse available doctors/departments
                   const doctors = [];
