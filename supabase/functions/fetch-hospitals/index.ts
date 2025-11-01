@@ -34,31 +34,43 @@ serve(async (req) => {
 
     const endpoints = [
       'https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList',
+      'http://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList',
       'https://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1',
+      'http://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1',
     ];
     const keysToTry = [PUBLIC_DATA_API_KEY, encodeURIComponent(PUBLIC_DATA_API_KEY)];
+    const keyParamNames = ['ServiceKey', 'serviceKey'] as const;
+    const typeParamNames = ['_type', 'type'] as const;
 
     let response: Response | null = null;
     let lastStatus = 0;
     let lastBody = '';
+    let lastUrl = '';
 
     for (const baseUrl of endpoints) {
       for (const key of keysToTry) {
-        const params = new URLSearchParams({
-          ServiceKey: key,
-          xPos: String(lng),
-          yPos: String(lat),
-          radius: String(radiusMeters),
-          pageNo: '1',
-          numOfRows: String(rows),
-          _type: 'json',
-        });
-        const url = `${baseUrl}?${params.toString()}`;
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (res.ok) { response = res; break; }
-        lastStatus = res.status;
-        lastBody = await res.text();
-        console.error('Upstream error', lastStatus, lastBody.slice(0, 200));
+        for (const keyName of keyParamNames) {
+          for (const typeName of typeParamNames) {
+            const params = new URLSearchParams({
+              xPos: String(lng),
+              yPos: String(lat),
+              radius: String(radiusMeters),
+              pageNo: '1',
+              numOfRows: String(rows),
+            });
+            params.set(keyName, key);
+            params.set(typeName, 'json');
+            const url = `${baseUrl}?${params.toString()}`;
+            lastUrl = url;
+            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (res.ok) { response = res; break; }
+            lastStatus = res.status;
+            lastBody = await res.text();
+            console.error('Upstream error', lastStatus, url, lastBody.slice(0, 200));
+          }
+          if (response) break;
+        }
+        if (response) break;
       }
       if (response) break;
     }
