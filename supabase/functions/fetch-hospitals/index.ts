@@ -55,8 +55,28 @@ serve(async (req) => {
       );
     }
 
-    const data = await response.json();
-    console.log('API Response:', JSON.stringify(data).substring(0, 500));
+    const text = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      console.error('Upstream returned non-JSON. First 300 chars:', text.slice(0, 300));
+      return new Response(
+        JSON.stringify({ error: 'Upstream returned non-JSON', status: 502, details: text.slice(0, 1000) }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const header = data?.response?.header;
+    if (!header || header?.resultCode !== '00') {
+      console.error('Public API header error:', header);
+      return new Response(
+        JSON.stringify({ error: 'Upstream error', status: 502, resultCode: header?.resultCode, resultMsg: header?.resultMsg }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('API Response OK');
 
     // Parse response and extract hospital data
     const items = data?.response?.body?.items?.item || [];
