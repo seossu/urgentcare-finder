@@ -40,8 +40,16 @@ const Clinic = () => {
   }, []);
 
   const handleNavigation = (clinicName: string, clinicAddress: string) => {
-    // Naver Map directions URL
-    const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(clinicName)}`;
+    if (!userLocation) {
+      toast.error("현재 위치를 가져오는 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    // Naver Map directions URL with current location as start point
+    const startPoint = `${userLocation.lng},${userLocation.lat},현재위치`;
+    const endPoint = `place:${encodeURIComponent(clinicName)}`;
+    const naverMapUrl = `https://map.naver.com/v5/directions/${startPoint}/${endPoint}/-/transit`;
+    
     window.open(naverMapUrl, "_blank");
   };
 
