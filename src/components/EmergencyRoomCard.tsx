@@ -63,16 +63,20 @@ export const EmergencyRoomCard = ({ room, currentAddress, currentLat, currentLng
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          {room.dutyTel3 && (
-            <Button variant="outline" asChild>
-              <a href={`tel:${room.dutyTel3}`}>
-                <Phone className="h-4 w-4 mr-2" />
-                전화
-              </a>
-            </Button>
-          )}
-          <Button onClick={handleNavigation}>
+        {room.dutyTel3 && (
+          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+            <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <a 
+              href={`tel:${room.dutyTel3}`}
+              className="text-sm font-medium hover:underline"
+            >
+              {room.dutyTel3}
+            </a>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-3">
+          <Button onClick={handleNavigation} className="w-full">
             <Navigation className="h-4 w-4 mr-2" />
             길찾기
           </Button>
