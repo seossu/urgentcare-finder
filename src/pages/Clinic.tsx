@@ -211,7 +211,7 @@ const Clinic = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ lat, lng, radiusKm, numOfRows: 300 }),
+          body: JSON.stringify({ lat, lng, radiusKm, numOfRows: 500 }),
         }
       );
       const hospitalData = await hospitalResponse.json();
@@ -247,7 +247,6 @@ const Clinic = () => {
             };
           })
           .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance)
-          .slice(0, 100) // Get more hospitals for filtering
           .map((hospital: any) => ({
             ...hospital,
             distance: `${hospital.calculatedDistance.toFixed(1)}km`,
