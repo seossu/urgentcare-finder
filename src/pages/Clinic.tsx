@@ -76,21 +76,22 @@ const Clinic = () => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ lat, lng }),
+                body: JSON.stringify({ lat, lng, radius: 5000 }), // 5km 반경
               }
             );
             const hospitalData = await hospitalResponse.json();
             
             if (hospitalData.emergencyRooms && hospitalData.emergencyRooms.length > 0) {
-              // Build list: general hospitals/clinics only (exclude pharmacies and emergency centers)
+              // API가 이미 거리순으로 정렬된 데이터를 반환
               const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
               const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
 
-              const normalized = hospitalData.emergencyRooms
-                .filter((item: any) => !isPharmacy(item))
+              const hospitalsWithDistance = hospitalData.emergencyRooms
+                .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
                 .map((hospital: any) => {
                   const latNum = parseFloat(hospital.wgs84Lat) || lat;
                   const lonNum = parseFloat(hospital.wgs84Lon) || lng;
+                  const dist = calculateDistance(lat, lng, latNum, lonNum);
                   return {
                     id: hospital.hpid || Math.random().toString(),
                     name: hospital.dutyName || '이름 없음',
@@ -103,19 +104,9 @@ const Clinic = () => {
                     closingTime: "18:00",
                     hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
                     hasNaverBooking: false,
-                    calculatedDistance: calculateDistance(lat, lng, latNum, lonNum),
-                    __isEmergency: isEmergency(hospital),
+                    distance: `${dist.toFixed(1)}km`,
                   };
-                })
-                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance);
-
-              const hospitalsWithDistance = normalized
-                .filter((h: any) => !h.__isEmergency)
-                .slice(0, 30)
-                .map((hospital: any) => ({
-                  ...hospital,
-                  distance: `${hospital.calculatedDistance.toFixed(1)}km`,
-                }));
+                });
               
               setHospitals(hospitalsWithDistance);
             }

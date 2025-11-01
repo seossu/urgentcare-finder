@@ -65,17 +65,17 @@ const Emergency = () => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ lat, lng }),
+                body: JSON.stringify({ lat, lng, radius: 5000 }), // 5km 반경
               }
             );
             const emergencyData = await emergencyResponse.json();
             
             if (emergencyData.emergencyRooms && emergencyData.emergencyRooms.length > 0) {
-              // Build list: prioritize emergency hospitals, exclude pharmacies
+              // API가 이미 거리순으로 정렬된 데이터를 반환하므로 그대로 사용
               const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
               const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
 
-              const normalized = emergencyData.emergencyRooms
+              const roomsWithDistance = emergencyData.emergencyRooms
                 .filter((room: any) => !isPharmacy(room))
                 .map((room: any) => {
                   const latNum = parseFloat(room.wgs84Lat) || lat;
@@ -91,23 +91,18 @@ const Emergency = () => {
                     totalBeds: parseInt(room.hvec) || 0,
                     availableBeds: parseInt(room.hvec) || 0,
                     doctors: ["응급의학과"],
-                    calculatedDistance: dist,
+                    distance: `${dist.toFixed(1)}km`,
                     __isEmergency: isEmergency(room),
                   };
-                })
-                .sort((a: any, b: any) => a.calculatedDistance - b.calculatedDistance);
+                });
 
-              const roomsWithDistance = [
-                ...normalized.filter((r: any) => r.__isEmergency),
-                ...normalized.filter((r: any) => !r.__isEmergency),
-              ]
-                .slice(0, 30)
-                .map((room: any) => ({
-                  ...room,
-                  distance: `${room.calculatedDistance.toFixed(1)}km`,
-                }));
+              // 응급실 우선, 일반 병원 후순위
+              const sortedRooms = [
+                ...roomsWithDistance.filter((r: any) => r.__isEmergency),
+                ...roomsWithDistance.filter((r: any) => !r.__isEmergency),
+              ];
               
-              setEmergencyRooms(roomsWithDistance);
+              setEmergencyRooms(sortedRooms);
             }
           } catch (error) {
             console.error("응급실 정보 조회 실패:", error);

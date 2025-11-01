@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { lat, lng, radius = 10 } = await req.json();
+    const { lat, lng, radius = 5000 } = await req.json(); // 기본 5km
 
     if (!lat || !lng) {
       return new Response(
@@ -28,14 +28,14 @@ serve(async (req) => {
       );
     }
 
-    // 응급의료기관 기본정보 조회 API
+    // 응급의료기관 기본정보 조회 API - 거리 기반 검색
     const baseUrl = 'http://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytBassInfoInqire';
     const params = new URLSearchParams({
       serviceKey: PUBLIC_DATA_API_KEY,
       WGS84_LON: lng.toString(),
       WGS84_LAT: lat.toString(),
       pageNo: '1',
-      numOfRows: '1000', // Get maximum results
+      numOfRows: '30', // 가까운 30개만 조회
     });
 
     console.log('Fetching emergency rooms from:', `${baseUrl}?${params.toString()}`);
