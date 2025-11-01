@@ -18,6 +18,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Function to fetch phone number from Kakao Local API
+async function fetchPhoneFromKakao(hospitalName: string): Promise<string> {
+  try {
+    const kakaoApiKey = Deno.env.get('KAKAO_REST_API_KEY');
+    if (!kakaoApiKey) {
+      console.warn('KAKAO_REST_API_KEY not found');
+      return '';
+    }
+
+    const searchUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(hospitalName)}`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        'Authorization': `KakaoAK ${kakaoApiKey}`
+      }
+    });
+
+    if (!response.ok) {
+      console.warn(`Kakao API failed for ${hospitalName}: ${response.status}`);
+      return '';
+    }
+
+    const data = await response.json();
+    if (data.documents && data.documents.length > 0) {
+      const phone = data.documents[0].phone || '';
+      console.info(`Found phone for ${hospitalName}: ${phone}`);
+      return phone;
+    }
+    
+    return '';
+  } catch (error) {
+    console.error(`Error fetching phone for ${hospitalName}:`, error);
+    return '';
+  }
+}
+
 // Region code mapping for NEMC API
 const REGION_CODE_MAP: { [key: string]: string } = {
   '서울': '11',
@@ -105,8 +140,8 @@ serve(async (req) => {
               console.info(`Sample NEMC hospital: ${JSON.stringify(hospitals[0]).substring(0, 300)}`);
             }
             
-            // Transform NEMC data to match expected format
-            const transformedItems = hospitals.map((hospital: any) => {
+            // Transform NEMC data to match expected format and fetch phone numbers
+            const transformedItems = await Promise.all(hospitals.map(async (hospital: any) => {
               // Calculate distance from user location if lat/lng provided
               let distance = 0;
               if (lat && lng) {
@@ -118,12 +153,15 @@ serve(async (req) => {
                 );
               }
               
+              // Fetch phone number from Kakao
+              const phoneNumber = await fetchPhoneFromKakao(hospital.emergencyRoomName);
+              
               return {
                 hpid: hospital.emogCode,
                 dutyName: hospital.emergencyRoomName,
                 dutyAddr: hospital.address,
                 dutyTel1: hospital.hotlineTel || '',
-                dutyTel3: hospital.emergencyRoomTel || '',
+                dutyTel3: phoneNumber || hospital.emergencyRoomTel || '',
                 wgs84Lat: hospital.latitude,
                 wgs84Lon: hospital.longitude,
                 distance: distance,
@@ -135,7 +173,7 @@ serve(async (req) => {
                   lastUpdated: '',
                 }
               };
-            });
+            }));
             
             // Sort by distance if lat/lng provided, otherwise keep original order
             if (lat && lng) {
