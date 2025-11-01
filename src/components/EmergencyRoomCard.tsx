@@ -5,11 +5,14 @@ import { EmergencyRoom } from "@/types/emergency";
 
 interface EmergencyRoomCardProps {
   room: EmergencyRoom;
+  currentAddress?: string;
 }
 
-export const EmergencyRoomCard = ({ room }: EmergencyRoomCardProps) => {
+export const EmergencyRoomCard = ({ room, currentAddress }: EmergencyRoomCardProps) => {
   const handleNavigation = () => {
-    const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(room.dutyName)}`;
+    const start = currentAddress || "내 위치";
+    const destination = room.dutyAddr || room.dutyName;
+    const naverMapUrl = `https://map.naver.com/v5/directions/-/-/-/${encodeURIComponent(start)}/${encodeURIComponent(destination)}`;
     window.open(naverMapUrl, "_blank");
   };
 

@@ -302,7 +302,7 @@ export const EmergencySearch = () => {
             </div>
             <div className="space-y-4">
               {emergencyRooms.map((room, index) => (
-                <EmergencyRoomCard key={room.hpid || index} room={room} />
+                <EmergencyRoomCard key={room.hpid || index} room={room} currentAddress={currentAddress} />
               ))}
             </div>
           </>
