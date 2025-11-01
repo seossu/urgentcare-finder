@@ -1,1 +1,4 @@
 project_id = "isieibfnexlimfujpqma"
+
+[functions.kakao-reverse-geocode]
+verify_jwt = false
