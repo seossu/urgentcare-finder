@@ -28,23 +28,23 @@ serve(async (req) => {
       );
     }
 
-    // 의료기관 정보 조회 API (반경/좌표 기반)
-    const baseUrl = 'https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList';
-    const params = new URLSearchParams({
-      ServiceKey: PUBLIC_DATA_API_KEY, // 대소문자 엄격
-      xPos: lng.toString(),
-      yPos: lat.toString(),
-      radius: Math.round(radiusKm * 1000).toString(), // km -> m
-      pageNo: '1',
-      numOfRows: String(numOfRows),
-      _type: 'json', // JSON 응답 강제
-    });
+    // 의료기관 정보 조회 API (반경/좌표 기반) - v1 엔드포인트 사용
+    const baseUrl = 'https://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1';
 
-    console.log('Fetching hospitals from:', `${baseUrl}?${params.toString()}`);
+    // serviceKey는 인코딩 상태에 따라 403이 발생할 수 있으므로 직접 쿼리스트링 구성
+    const query =
+      `ServiceKey=${PUBLIC_DATA_API_KEY}` +
+      `&xPos=${lng}` +
+      `&yPos=${lat}` +
+      `&radius=${Math.round(radiusKm * 1000)}` +
+      `&pageNo=1` +
+      `&numOfRows=${numOfRows}` +
+      `&_type=json`;
 
-    const response = await fetch(`${baseUrl}?${params.toString()}`, {
-      headers: { 'Accept': 'application/json' },
-    });
+    console.log('Fetching hospitals from (v1):', `${baseUrl}?...`);
+
+
+    const response = await fetch(`${baseUrl}?${query}`, { headers: { 'Accept': 'application/json' } });
 
     if (!response.ok) {
       const errorText = await response.text();

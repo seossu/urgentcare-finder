@@ -65,7 +65,7 @@ const Emergency = () => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ lat, lng, radiusKm: 50, numOfRows: 300 }), // 더 넓게 수집 후 근접 30개 추출
+                body: JSON.stringify({ lat, lng, radiusKm: 10, numOfRows: 300 }),
               }
             );
             const hospitalData = await emergencyResponse.json();
