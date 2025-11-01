@@ -12,10 +12,11 @@ interface EmergencyRoomCardProps {
 
 export const EmergencyRoomCard = ({ room, currentAddress, currentLat, currentLng }: EmergencyRoomCardProps) => {
   const handleNavigation = () => {
-    const start = currentAddress || "내 위치";
-    const destination = room.dutyAddr || room.dutyName;
-    // Add /car at the end to automatically start route search
-    const naverMapUrl = `https://map.naver.com/v5/directions/${encodeURIComponent(start)}/${encodeURIComponent(destination)}/car`;
+    const start = encodeURIComponent(currentAddress || "현재 위치");
+    const destination = encodeURIComponent(room.dutyName);
+    
+    // Naver Map directions format with coordinates
+    const naverMapUrl = `https://map.naver.com/p/directions/${currentLng},${currentLat},${start},,ADDRESS_POI/${room.wgs84Lon},${room.wgs84Lat},${destination},${room.hpid},PLACE_POI/-/transit?c=14.00,0,0,0,dh`;
     window.open(naverMapUrl, "_blank");
   };
 
