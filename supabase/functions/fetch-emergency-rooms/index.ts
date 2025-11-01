@@ -70,6 +70,7 @@ serve(async (req) => {
           
           if (Array.isArray(items) && items.length > 0) {
             console.info(`Success! Found ${items.length} items`);
+            console.info(`Sample item structure: ${JSON.stringify(items[0])}`);
             return new Response(
               JSON.stringify(data),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }

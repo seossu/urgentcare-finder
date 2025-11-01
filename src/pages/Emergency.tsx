@@ -70,6 +70,10 @@ const Emergency = () => {
             );
             const emergencyData = await emergencyResponse.json();
             
+            // Log the response structure for debugging
+            console.log("Emergency API Response:", emergencyData);
+            console.log("Sample item:", emergencyData.response?.body?.items?.item?.[0]);
+            
             // Handle both Public Data API and Kakao API response formats
             const items = emergencyData.response?.body?.items?.item || [];
             
