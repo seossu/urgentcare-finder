@@ -14,6 +14,7 @@ export const EmergencySearch = () => {
   const [stage2, setStage2] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [emergencyRooms, setEmergencyRooms] = useState<EmergencyRoom[]>([]);
+  const [currentAddress, setCurrentAddress] = useState<string>("");
 
   // Get current location and set default region
   useEffect(() => {
@@ -35,6 +36,10 @@ export const EmergencySearch = () => {
               }
             );
             const data = await response.json();
+            
+            if (data.address) {
+              setCurrentAddress(data.address);
+            }
             
             if (data.region1) {
               // Map short names to full names
@@ -63,19 +68,39 @@ export const EmergencySearch = () => {
               if (data.region2) {
                 setStage2(data.region2);
               }
+              
+              toast({
+                title: "현재 위치",
+                description: data.address || `${fullRegionName} ${data.region2 || ''}`,
+              });
             }
           } catch (error) {
             console.error("현재 위치 조회 실패:", error);
             setStage1("서울특별시");
+            toast({
+              title: "위치 조회 실패",
+              description: "기본 위치(서울)로 설정되었습니다.",
+              variant: "destructive",
+            });
           }
         },
         (error) => {
           console.error("위치 정보를 가져올 수 없습니다:", error);
           setStage1("서울특별시");
+          toast({
+            title: "위치 정보 없음",
+            description: "기본 위치(서울)로 설정되었습니다.",
+            variant: "destructive",
+          });
         }
       );
     } else {
       setStage1("서울특별시");
+      toast({
+        title: "위치 서비스 없음",
+        description: "기본 위치(서울)로 설정되었습니다.",
+        variant: "destructive",
+      });
     }
   }, []);
 
@@ -161,8 +186,14 @@ export const EmergencySearch = () => {
       {/* Region Selection Section */}
       <div className="border-b bg-card">
         <div className="container mx-auto px-4 py-3">
-          <div className="mb-2">
+          <div className="mb-3">
             <h2 className="text-base font-semibold">지역 선택</h2>
+            {currentAddress && (
+              <p className="text-sm text-muted-foreground mt-1">
+                <MapPin className="inline h-3 w-3 mr-1" />
+                현재 위치: {currentAddress}
+              </p>
+            )}
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
