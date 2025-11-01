@@ -58,7 +58,8 @@ serve(async (req) => {
 - 재활의학과
 - 가정의학과
 
-응답은 반드시 다음 JSON 형식으로만 제공하세요:
+**응답 형식: 반드시 순수한 JSON만 반환하세요. 마크다운, 코드 블록, 설명 없이 JSON만 작성하세요.**
+
 {
   "department": "하나의 진료과만 (예: 내과)",
   "reason": "추천 이유 (2-3문장)",
@@ -96,12 +97,22 @@ serve(async (req) => {
 
     console.log('AI recommendation:', recommendation);
 
-    // Parse the JSON response from AI
+    // Parse the JSON response from AI - remove markdown code blocks if present
     let parsedRecommendation;
     try {
-      parsedRecommendation = JSON.parse(recommendation);
+      // Remove markdown code blocks (```json ... ``` or ``` ... ```)
+      let cleanedRecommendation = recommendation.trim();
+      if (cleanedRecommendation.startsWith('```')) {
+        // Remove opening ```json or ```
+        cleanedRecommendation = cleanedRecommendation.replace(/^```(?:json)?\s*\n?/, '');
+        // Remove closing ```
+        cleanedRecommendation = cleanedRecommendation.replace(/\n?```\s*$/, '');
+      }
+      
+      parsedRecommendation = JSON.parse(cleanedRecommendation.trim());
     } catch (e) {
       console.error('Failed to parse AI response:', e);
+      console.error('Raw response:', recommendation);
       // Fallback if AI doesn't return valid JSON
       parsedRecommendation = {
         department: "가정의학과",
