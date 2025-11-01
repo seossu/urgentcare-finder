@@ -18,8 +18,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Function to fetch phone number from Kakao Local API
-async function fetchPhoneFromKakao(hospitalName: string): Promise<string> {
+// Function to fetch phone number from Kakao Local API (robust: keyword → nearby fallback)
+async function fetchPhoneFromKakao(
+  hospitalName: string,
+  address?: string,
+  lat?: number,
+  lng?: number
+): Promise<string> {
   try {
     const kakaoApiKey = Deno.env.get('KAKAO_REST_API_KEY');
     if (!kakaoApiKey) {
@@ -27,25 +32,51 @@ async function fetchPhoneFromKakao(hospitalName: string): Promise<string> {
       return '';
     }
 
-    const searchUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(hospitalName)}`;
-    const response = await fetch(searchUrl, {
-      headers: {
-        'Authorization': `KakaoAK ${kakaoApiKey}`
+    const headers = { 'Authorization': `KakaoAK ${kakaoApiKey}` };
+
+    // 1) Keyword search (prefer exact/contains match)
+    const regionHint = address ? address.split(' ').slice(0, 2).join(' ') : '';
+    const keyword = `${hospitalName} ${regionHint}`.trim();
+    const kwUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(keyword)}&size=5`;
+    const kwRes = await fetch(kwUrl, { headers });
+    if (kwRes.ok) {
+      const data = await kwRes.json();
+      if (data.documents && data.documents.length > 0) {
+        // Try to find the best match by name containment (ignoring spaces)
+        const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+        const target = norm(hospitalName);
+        const candidate = data.documents.find((d: any) => norm(d.place_name).includes(target)) || data.documents[0];
+        const phone = candidate?.phone || '';
+        if (phone) {
+          console.info(`Kakao keyword phone for ${hospitalName}: ${phone}`);
+          return phone;
+        }
       }
-    });
-
-    if (!response.ok) {
-      console.warn(`Kakao API failed for ${hospitalName}: ${response.status}`);
-      return '';
+    } else {
+      console.warn(`Kakao keyword search failed for ${hospitalName}: ${kwRes.status}`);
     }
 
-    const data = await response.json();
-    if (data.documents && data.documents.length > 0) {
-      const phone = data.documents[0].phone || '';
-      console.info(`Found phone for ${hospitalName}: ${phone}`);
-      return phone;
+    // 2) Nearby category search fallback (HP8: 병원)
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      const catUrl = `https://dapi.kakao.com/v2/local/category/search.json?category_group_code=HP8&x=${lng}&y=${lat}&radius=500&size=5`;
+      const catRes = await fetch(catUrl, { headers });
+      if (catRes.ok) {
+        const data = await catRes.json();
+        if (data.documents && data.documents.length > 0) {
+          const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+          const target = norm(hospitalName);
+          const candidate = data.documents.find((d: any) => norm(d.place_name).includes(target)) || data.documents[0];
+          const phone = candidate?.phone || '';
+          if (phone) {
+            console.info(`Kakao nearby phone for ${hospitalName}: ${phone}`);
+            return phone;
+          }
+        }
+      } else {
+        console.warn(`Kakao category search failed for ${hospitalName}: ${catRes.status}`);
+      }
     }
-    
+
     return '';
   } catch (error) {
     console.error(`Error fetching phone for ${hospitalName}:`, error);
@@ -153,8 +184,13 @@ serve(async (req) => {
                 );
               }
               
-              // Fetch phone number from Kakao
-              const phoneNumber = await fetchPhoneFromKakao(hospital.emergencyRoomName);
+              // Fetch phone number from Kakao (with address and coords)
+              const phoneNumber = await fetchPhoneFromKakao(
+                hospital.emergencyRoomName,
+                hospital.address,
+                hospital.latitude,
+                hospital.longitude
+              );
               
               return {
                 hpid: hospital.emogCode,
