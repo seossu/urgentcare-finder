@@ -125,6 +125,7 @@ const Clinic = () => {
             
             if (data.address) {
               setUserLocation({ lat, lng, address: data.address });
+              setAddressInput(data.address);
             }
           } catch (error) {
             console.error("주소 변환 실패:", error);
