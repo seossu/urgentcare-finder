@@ -37,10 +37,15 @@ const Profile = () => {
         .from("profiles")
         .select("*")
         .eq("id", session.user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("Error loading profile:", error);
+        toast({
+          title: "프로필 로딩 오류",
+          description: "프로필 정보를 불러오는데 실패했습니다.",
+          variant: "destructive",
+        });
       } else if (profile) {
         setMedicalConditions(profile.medical_conditions || "");
         setMedications(profile.medications || "");
