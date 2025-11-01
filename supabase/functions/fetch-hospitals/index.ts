@@ -28,23 +28,47 @@ serve(async (req) => {
       );
     }
 
-    // 의료기관 정보 조회 API (반경/좌표 기반) - v1 엔드포인트 사용 + 파라미터 표준화
-    const baseUrl = 'https://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1';
+    // Build request with retries across endpoints and key encodings
+    const radiusMeters = Math.min(Math.round(radiusKm * 1000), 5000);
+    const rows = Math.min(Number(numOfRows) || 100, 100);
 
-    const radiusMeters = Math.min(Math.round(radiusKm * 1000), 5000); // API 최대 반경 제한 보호
-    const rows = Math.min(Number(numOfRows) || 100, 100); // 최대 100 제한
+    const endpoints = [
+      'https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList',
+      'https://apis.data.go.kr/B551182/HospInfoService1/getHospBasisList1',
+    ];
+    const keysToTry = [PUBLIC_DATA_API_KEY, encodeURIComponent(PUBLIC_DATA_API_KEY)];
 
-    const params = new URLSearchParams({
-      serviceKey: PUBLIC_DATA_API_KEY, // 소문자 키 사용 (v1 호환)
-      xPos: String(lng),
-      yPos: String(lat),
-      radius: String(radiusMeters),
-      pageNo: '1',
-      numOfRows: String(rows),
-      _type: 'json',
-    });
+    let response: Response | null = null;
+    let lastStatus = 0;
+    let lastBody = '';
 
-    const response = await fetch(`${baseUrl}?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
+    for (const baseUrl of endpoints) {
+      for (const key of keysToTry) {
+        const params = new URLSearchParams({
+          ServiceKey: key,
+          xPos: String(lng),
+          yPos: String(lat),
+          radius: String(radiusMeters),
+          pageNo: '1',
+          numOfRows: String(rows),
+          _type: 'json',
+        });
+        const url = `${baseUrl}?${params.toString()}`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (res.ok) { response = res; break; }
+        lastStatus = res.status;
+        lastBody = await res.text();
+        console.error('Upstream error', lastStatus, lastBody.slice(0, 200));
+      }
+      if (response) break;
+    }
+
+    if (!response) {
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch hospitals', status: lastStatus || 502, details: lastBody || 'Unknown upstream error' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
