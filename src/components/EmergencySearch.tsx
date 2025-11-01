@@ -16,10 +16,10 @@ export const EmergencySearch = () => {
   const [emergencyRooms, setEmergencyRooms] = useState<EmergencyRoom[]>([]);
 
   const handleSearch = async () => {
-    if (!stage1 || !stage2) {
+    if (!stage1) {
       toast({
         title: "지역을 선택해주세요",
-        description: "시도와 시군구를 모두 선택해야 합니다.",
+        description: "시도를 선택해야 합니다.",
         variant: "destructive",
       });
       return;
@@ -94,43 +94,85 @@ export const EmergencySearch = () => {
         </div>
       </header>
 
-      {/* Search Section */}
+      {/* Region Selection Section */}
       <div className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Select
-            value={stage1}
-            onValueChange={(value) => {
-              setStage1(value);
-              setStage2("");
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="시도 선택" />
-            </SelectTrigger>
-            <SelectContent>
+        <div className="container mx-auto px-4 py-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold mb-2">시/도</h2>
+            <p className="text-sm text-muted-foreground">지역을 선택하세요</p>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {/* Left: Province/City List */}
+            <div className="lg:col-span-1 space-y-2">
               {Object.keys(REGIONS).map((region) => (
-                <SelectItem key={region} value={region}>
+                <button
+                  key={region}
+                  onClick={() => {
+                    setStage1(region);
+                    setStage2("");
+                  }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
+                    stage1 === region
+                      ? "bg-primary text-primary-foreground font-medium"
+                      : "bg-muted hover:bg-muted/80"
+                  }`}
+                >
                   {region}
-                </SelectItem>
+                  {stage1 === region && <span className="float-right">›</span>}
+                </button>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
 
-          <Select value={stage2} onValueChange={setStage2} disabled={!stage1}>
-            <SelectTrigger>
-              <SelectValue placeholder="시군구 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableDistricts.map((district) => (
-                <SelectItem key={district} value={district}>
-                  {district}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {/* Right: District Grid */}
+            <div className="lg:col-span-3">
+              {stage1 ? (
+                <>
+                  <div className="mb-3">
+                    <h3 className="font-medium">{stage1}</h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    <button
+                      onClick={() => setStage2("")}
+                      className={`px-4 py-2 rounded-lg border transition-colors ${
+                        stage2 === ""
+                          ? "bg-destructive text-destructive-foreground border-destructive"
+                          : "bg-background border-border hover:bg-muted"
+                      }`}
+                    >
+                      전체
+                    </button>
+                    {availableDistricts.map((district) => (
+                      <button
+                        key={district}
+                        onClick={() => setStage2(district)}
+                        className={`px-4 py-2 rounded-lg border transition-colors ${
+                          stage2 === district
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border hover:bg-muted"
+                        }`}
+                      >
+                        {district}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  시/도를 선택해주세요
+                </div>
+              )}
+            </div>
+          </div>
 
-            <Button onClick={handleSearch} disabled={loading || !stage1 || !stage2} className="w-full" size="lg">
+          {/* Search Button */}
+          <div className="mt-6">
+            <Button 
+              onClick={handleSearch} 
+              disabled={loading || !stage1} 
+              className="w-full" 
+              size="lg"
+            >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -139,7 +181,7 @@ export const EmergencySearch = () => {
               ) : (
                 <>
                   <Search className="w-4 h-4 mr-2" />
-                  검색
+                  {stage2 ? `${stage1} ${stage2}` : stage1} 응급실 검색
                 </>
               )}
             </Button>
