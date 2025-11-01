@@ -27,6 +27,53 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 };
 
+// Check if hospital is currently open based on operating hours
+const checkHospitalStatus = (startTime: string, endTime: string): { isOpen: boolean; closingTime: string | null } => {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+  // Parse start time (format: "0900" or "09:00")
+  const startTimeStr = startTime.replace(/:/g, '').padStart(4, '0');
+  const startHour = parseInt(startTimeStr.substring(0, 2), 10);
+  const startMin = parseInt(startTimeStr.substring(2, 4), 10);
+  const startTimeInMinutes = startHour * 60 + startMin;
+
+  // Parse end time (format: "1800" or "18:00")
+  const endTimeStr = endTime.replace(/:/g, '').padStart(4, '0');
+  const endHour = parseInt(endTimeStr.substring(0, 2), 10);
+  const endMin = parseInt(endTimeStr.substring(2, 4), 10);
+  const endTimeInMinutes = endHour * 60 + endMin;
+
+  // Check if current time is within operating hours
+  const isOpen = currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
+  
+  // Format closing time
+  const closingTime = isOpen ? `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}` : null;
+
+  return { isOpen, closingTime };
+};
+
+// Extract department from hospital name
+const extractDepartment = (name: string): string => {
+  if (name.includes("내과")) return "내과";
+  if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
+  if (name.includes("정형외과")) return "정형외과";
+  if (name.includes("피부과")) return "피부과";
+  if (name.includes("이비인후과")) return "이비인후과";
+  if (name.includes("안과")) return "안과";
+  if (name.includes("산부인과")) return "산부인과";
+  if (name.includes("치과")) return "치과";
+  if (name.includes("한의원")) return "한의원";
+  if (name.includes("정신건강의학과") || name.includes("정신과")) return "정신건강의학과";
+  if (name.includes("비뇨기과")) return "비뇨기과";
+  if (name.includes("외과")) return "외과";
+  if (name.includes("신경과")) return "신경과";
+  if (name.includes("재활의학과")) return "재활의학과";
+  return "일반";
+};
+
 const Clinic = () => {
   const navigate = useNavigate();
   // Applied filters
@@ -95,25 +142,6 @@ const Clinic = () => {
               const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
               const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
 
-              // Extract department from hospital name
-              const extractDepartment = (name: string): string => {
-                if (name.includes("내과")) return "내과";
-                if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
-                if (name.includes("정형외과")) return "정형외과";
-                if (name.includes("피부과")) return "피부과";
-                if (name.includes("이비인후과")) return "이비인후과";
-                if (name.includes("안과")) return "안과";
-                if (name.includes("산부인과")) return "산부인과";
-                if (name.includes("치과")) return "치과";
-                if (name.includes("한의원")) return "한의원";
-                if (name.includes("정신건강의학과") || name.includes("정신과")) return "정신건강의학과";
-                if (name.includes("비뇨기과")) return "비뇨기과";
-                if (name.includes("외과")) return "외과";
-                if (name.includes("신경과")) return "신경과";
-                if (name.includes("재활의학과")) return "재활의학과";
-                return "일반";
-              };
-
               const normalized = hospitalData.hospitals
                 .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
                 .map((hospital: any) => {
@@ -121,6 +149,10 @@ const Clinic = () => {
                   const lonNum = parseFloat(hospital.wgs84Lon) || lng;
                   const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
                   const hospitalName = hospital.dutyName || '이름 없음';
+                  const startTime = hospital.dutyTime1s || "0900";
+                  const endTime = hospital.dutyTime1c || "1800";
+                  const status = checkHospitalStatus(startTime, endTime);
+                  
                   return {
                     id: hospital.hpid || Math.random().toString(),
                     name: hospitalName,
@@ -129,9 +161,9 @@ const Clinic = () => {
                     lat: latNum,
                     lng: lonNum,
                     department: extractDepartment(hospitalName),
-                    isOpen: true,
-                    closingTime: "18:00",
-                    hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
+                    isOpen: status.isOpen,
+                    closingTime: status.closingTime,
+                    hours: `평일 ${startTime}~${endTime}`,
                     hasNaverBooking: false,
                     calculatedDistance,
                   };
@@ -233,25 +265,6 @@ const Clinic = () => {
             const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
             const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
 
-            // Extract department from hospital name
-            const extractDepartment = (name: string): string => {
-              if (name.includes("내과")) return "내과";
-              if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
-              if (name.includes("정형외과")) return "정형외과";
-              if (name.includes("피부과")) return "피부과";
-              if (name.includes("이비인후과")) return "이비인후과";
-              if (name.includes("안과")) return "안과";
-              if (name.includes("산부인과")) return "산부인과";
-              if (name.includes("치과")) return "치과";
-              if (name.includes("한의원")) return "한의원";
-              if (name.includes("정신건강의학과") || name.includes("정신과")) return "정신건강의학과";
-              if (name.includes("비뇨기과")) return "비뇨기과";
-              if (name.includes("외과")) return "외과";
-              if (name.includes("신경과")) return "신경과";
-              if (name.includes("재활의학과")) return "재활의학과";
-              return "일반";
-            };
-
             const normalized = hospitalData.hospitals
               .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
               .map((hospital: any) => {
@@ -259,6 +272,10 @@ const Clinic = () => {
                 const lonNum = parseFloat(hospital.wgs84Lon) || lng;
                 const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
                 const hospitalName = hospital.dutyName || '이름 없음';
+                const startTime = hospital.dutyTime1s || "0900";
+                const endTime = hospital.dutyTime1c || "1800";
+                const status = checkHospitalStatus(startTime, endTime);
+                
                 return {
                   id: hospital.hpid || Math.random().toString(),
                   name: hospitalName,
@@ -267,9 +284,9 @@ const Clinic = () => {
                   lat: latNum,
                   lng: lonNum,
                   department: extractDepartment(hospitalName),
-                  isOpen: true,
-                  closingTime: "18:00",
-                  hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
+                  isOpen: status.isOpen,
+                  closingTime: status.closingTime,
+                  hours: `평일 ${startTime}~${endTime}`,
                   hasNaverBooking: false,
                   calculatedDistance,
                 };
@@ -352,25 +369,6 @@ const Clinic = () => {
               const isPharmacy = (item: any) => (item.dutyName?.includes("약국")) || item.dutyEryn === 2 || (item.hpid?.startsWith("C"));
               const isEmergency = (item: any) => item.dutyEryn === 1 || /응급/.test(item.dutyName || "");
 
-              // Extract department from hospital name
-              const extractDepartment = (name: string): string => {
-                if (name.includes("내과")) return "내과";
-                if (name.includes("소아청소년과") || name.includes("소아과")) return "소아청소년과";
-                if (name.includes("정형외과")) return "정형외과";
-                if (name.includes("피부과")) return "피부과";
-                if (name.includes("이비인후과")) return "이비인후과";
-                if (name.includes("안과")) return "안과";
-                if (name.includes("산부인과")) return "산부인과";
-                if (name.includes("치과")) return "치과";
-                if (name.includes("한의원")) return "한의원";
-                if (name.includes("정신건강의학과") || name.includes("정신과")) return "정신건강의학과";
-                if (name.includes("비뇨기과")) return "비뇨기과";
-                if (name.includes("외과")) return "외과";
-                if (name.includes("신경과")) return "신경과";
-                if (name.includes("재활의학과")) return "재활의학과";
-                return "일반";
-              };
-
               const normalized = hospitalData.hospitals
                 .filter((item: any) => !isPharmacy(item) && !isEmergency(item))
                 .map((hospital: any) => {
@@ -378,6 +376,10 @@ const Clinic = () => {
                   const lonNum = parseFloat(hospital.wgs84Lon) || lng;
                   const calculatedDistance = calculateDistance(lat, lng, latNum, lonNum);
                   const hospitalName = hospital.dutyName || '이름 없음';
+                  const startTime = hospital.dutyTime1s || "0900";
+                  const endTime = hospital.dutyTime1c || "1800";
+                  const status = checkHospitalStatus(startTime, endTime);
+                  
                   return {
                     id: hospital.hpid || Math.random().toString(),
                     name: hospitalName,
@@ -386,9 +388,9 @@ const Clinic = () => {
                     lat: latNum,
                     lng: lonNum,
                     department: extractDepartment(hospitalName),
-                    isOpen: true,
-                    closingTime: "18:00",
-                    hours: `평일 ${hospital.dutyTime1s || "09:00"}~${hospital.dutyTime1c || "1800"}`,
+                    isOpen: status.isOpen,
+                    closingTime: status.closingTime,
+                    hours: `평일 ${startTime}~${endTime}`,
                     hasNaverBooking: false,
                     calculatedDistance,
                   };
@@ -663,7 +665,7 @@ const Clinic = () => {
                         진료 중 (~{clinic.closingTime})
                       </Badge>
                     ) : (
-                      <Badge variant="secondary">진료 마감</Badge>
+                      <Badge variant="secondary">휴진</Badge>
                     )}
                   </div>
                   <div className="space-y-1">
