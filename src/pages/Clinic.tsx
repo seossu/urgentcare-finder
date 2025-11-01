@@ -208,14 +208,17 @@ const Clinic = () => {
                       <Badge variant="secondary">진료 마감</Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="h-4 w-4" />
-                      <span>{clinic.distance}</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-4 w-4" />
+                        <span>{clinic.distance}</span>
+                      </div>
+                      <span className="px-2 py-1 bg-secondary/10 text-secondary rounded">
+                        {clinic.department}
+                      </span>
                     </div>
-                    <span className="px-2 py-1 bg-secondary/10 text-secondary rounded">
-                      {clinic.department}
-                    </span>
+                    <p className="text-sm text-muted-foreground pl-5">{clinic.address}</p>
                   </div>
                 </div>
               </div>

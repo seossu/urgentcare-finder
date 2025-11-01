@@ -127,9 +127,12 @@ const Emergency = () => {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h3 className="text-lg font-bold mb-2">{room.name}</h3>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                    <MapPin className="h-4 w-4" />
-                    <span>{room.distance}</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="h-4 w-4" />
+                      <span>{room.distance}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground pl-6">{room.address}</p>
                   </div>
                 </div>
               </div>
