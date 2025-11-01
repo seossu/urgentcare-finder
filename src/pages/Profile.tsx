@@ -1,13 +1,107 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { User, MapPin, Pill, Activity, UserPlus, ArrowLeft } from "lucide-react";
+import { ArrowLeft, LogOut, User, Activity, Pill, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 const Profile = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Profile data
+  const [medicalConditions, setMedicalConditions] = useState("");
+  const [medications, setMedications] = useState("");
+  const [familyHistory, setFamilyHistory] = useState("");
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        navigate("/auth");
+        return;
+      }
+
+      setUser(session.user);
+      
+      // Load profile data
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+
+      if (error) {
+        console.error("Error loading profile:", error);
+      } else if (profile) {
+        setMedicalConditions(profile.medical_conditions || "");
+        setMedications(profile.medications || "");
+        setFamilyHistory(profile.family_history || "");
+      }
+    };
+
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const handleSaveMedicalInfo = async () => {
+    if (!user) return;
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          medical_conditions: medicalConditions,
+          medications: medications,
+          family_history: familyHistory,
+        })
+        .eq("id", user.id);
+
+      if (error) {
+        toast({
+          title: "저장 실패",
+          description: "정보 저장 중 오류가 발생했습니다.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "저장 완료",
+          description: "의료 정보가 저장되었습니다.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "오류",
+        description: "정보 저장 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -26,12 +120,13 @@ const Profile = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-6 max-w-3xl space-y-6">
-        {/* User Info */}
+      {/* Profile Content */}
+      <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
+        {/* User Information */}
         <Card className="p-6">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <User className="h-5 w-5 text-primary" />
-            내 정보
+            기본 정보
           </h2>
           <div className="space-y-4">
             <div>
@@ -39,30 +134,10 @@ const Profile = () => {
               <Input
                 id="email"
                 type="email"
-                defaultValue="user@example.com"
+                value={user?.email || ""}
                 disabled
+                className="bg-muted"
               />
-            </div>
-          </div>
-        </Card>
-
-        {/* Address */}
-        <Card className="p-6">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-secondary" />
-            주거 지역
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="address">주소</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="address"
-                  placeholder="주소를 입력하세요"
-                  defaultValue="서울시 종로구"
-                />
-                <Button variant="secondary">주소 검색</Button>
-              </div>
             </div>
           </div>
         </Card>
@@ -75,12 +150,11 @@ const Profile = () => {
           </h2>
           <div className="space-y-4">
             <Textarea
-              placeholder="예: 당뇨, 고혈압"
-              rows={3}
+              placeholder="기저질환 정보를 입력하세요 (예: 당뇨병, 고혈압 등)"
+              className="min-h-[100px]"
+              value={medicalConditions}
+              onChange={(e) => setMedicalConditions(e.target.value)}
             />
-            <Button variant="outline" size="sm">
-              저장
-            </Button>
           </div>
         </Card>
 
@@ -88,51 +162,52 @@ const Profile = () => {
         <Card className="p-6">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <Pill className="h-5 w-5 text-secondary" />
-            복용 중인 약
+            복용중인 약
           </h2>
           <div className="space-y-4">
             <Textarea
-              placeholder="예: 아스피린, 메트포르민"
-              rows={3}
+              placeholder="현재 복용중인 약 정보를 입력하세요"
+              className="min-h-[100px]"
+              value={medications}
+              onChange={(e) => setMedications(e.target.value)}
             />
-            <Button variant="outline" size="sm">
-              저장
-            </Button>
           </div>
         </Card>
 
-        {/* Family Members */}
+        {/* Family History */}
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-accent" />
-              가족 구성원
-            </h2>
-            <Button size="sm">
-              <UserPlus className="h-4 w-4 mr-2" />
-              가족 추가
-            </Button>
-          </div>
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Users className="h-5 w-5 text-accent" />
+            가족력
+          </h2>
           <div className="space-y-4">
-            <Card className="p-4 bg-muted">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold">김철수</h3>
-                <span className="text-sm text-muted-foreground">아버지</span>
-              </div>
-              <div className="text-sm space-y-1">
-                <p><span className="font-medium">기저질환:</span> 고혈압</p>
-                <p><span className="font-medium">복용약:</span> 혈압약</p>
-              </div>
-            </Card>
+            <Textarea
+              placeholder="가족력 정보를 입력하세요 (예: 가족 중 특정 질병 병력 등)"
+              className="min-h-[100px]"
+              value={familyHistory}
+              onChange={(e) => setFamilyHistory(e.target.value)}
+            />
           </div>
         </Card>
 
-        {/* Logout */}
-        <div className="pt-4">
-          <Button variant="destructive" className="w-full">
-            로그아웃
-          </Button>
-        </div>
+        {/* Save Button */}
+        <Button 
+          className="w-full" 
+          onClick={handleSaveMedicalInfo}
+          disabled={isLoading}
+        >
+          {isLoading ? "저장 중..." : "의료 정보 저장"}
+        </Button>
+
+        {/* Logout Button */}
+        <Button 
+          variant="destructive" 
+          className="w-full"
+          onClick={handleLogout}
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          로그아웃
+        </Button>
       </div>
     </div>
   );

@@ -1,10 +1,31 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MapPin, Hospital, Stethoscope, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 const Home = () => {
   const navigate = useNavigate();
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+
+  useEffect(() => {
+    // Check current session
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+    };
+
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -15,10 +36,17 @@ const Home = () => {
             <Hospital className="h-8 w-8 text-primary" />
             <h1 className="text-2xl font-bold">메디파인더</h1>
           </div>
-          <Button variant="outline" onClick={() => navigate("/auth")}>
-            <User className="h-4 w-4 mr-2" />
-            로그인
-          </Button>
+          {user ? (
+            <Button variant="outline" onClick={() => navigate("/profile")}>
+              <User className="h-4 w-4 mr-2" />
+              마이페이지
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => navigate("/auth")}>
+              <User className="h-4 w-4 mr-2" />
+              로그인
+            </Button>
+          )}
         </div>
       </header>
 
